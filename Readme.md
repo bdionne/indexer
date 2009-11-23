@@ -1,6 +1,6 @@
 My son, a pianist, was home for the weekend, filling the house with beautiful Shostakovich fugues and Beethoven sonatas, so I decided to relax and hack on the couch.
 
-## FTI for CouchDB databases in CouchDB
+## Prototyping FTI for CouchDB databases in CouchDB
 
 Chapter 20 of Joe Armstrong's <a href="http://www.pragprog.com/titles/jaerlang/programming-erlang">Erlang book</a> provides a nice example of the use of processes to do full text indexing with map/reduce. The essential idea is to spawn a process for each document to index and let the reduce function populate the inverted index as it collects the results of the map phase. I recently heard mention of <a href="http://dukesoferl.blogspot.com/2009/07/osmos.html">osmos</a> in a talk from the NoSQL east conference and it struck me as the ideal data structure for storing an inverted, particularly since it supports user-defined merging. So when one encounters the word Neoplasm in multiple docs one can just write the key/value to the store and let a defined merging function sort things out.
 
@@ -34,5 +34,14 @@ And with luck you see these <a href="http://gist.github.com/241278">messages</a>
 And get results like <a href="http://gist.github.com/241279">these</a>.
 
 It takes a checkpoint after indexing every n docs, so you can stop() and then call indexer:index("biomedgt") again and it resumes. What gets indexed is all the values in the docs but not the keys or _xxx fields.
+
+## Motivation
+
+I think Lucene is pretty much state of the art these days in text indexing but I've been thinking it'd be nice to have something more native.
+
+
+
+
+
 
  
