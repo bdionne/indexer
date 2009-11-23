@@ -1,0 +1,4 @@
+*.beam
+*.gz
+trigramsS.tab
+checkpoints/*
