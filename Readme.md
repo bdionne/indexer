@@ -29,7 +29,7 @@ After starting couch:
 
 And with luck you see these <a href="http://gist.github.com/241278">messages</a>. While it's running you can search:
 
-    <a href="http://gist.github.com/241279">indexer:search(\"Mental Dysfunction\").</a> 
+    <a href="http://gist.github.com/241279">indexer:search("Mental Dysfunction").</a> 
 
 It takes a checkpoint after indexing every n docs, so you can stop() and then call indexer:index("biomedgt") again and it resumes. What gets indexed is all the values in the docs but not the keys or _xxx fields.
 
