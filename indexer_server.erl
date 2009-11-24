@@ -73,13 +73,14 @@ init(Dir) ->
 
 handle_call({index, DbName}, _From, S) ->
     DbIndexDir = S#env.outdir ++ "/" ++ DbName,
+    DbIndexName = list_to_binary(DbName ++ "-idx"),
     case filelib:is_dir(DbIndexDir) of 
         true -> ok;
         false -> file:make_dir(DbIndexDir)
     end,
     case file:list_dir(DbIndexDir) of
 	{ok, []} ->
-	    Cont = indexer_couchdb_crawler:start(list_to_binary(DbName)),
+	    Cont = indexer_couchdb_crawler:start(list_to_binary(DbName),[{reset, DbIndexName}]),
 	    Check = {DbIndexDir, Cont},
 	    io:format("creating checkpoint:~p~n",[Check]),
 	    indexer_checkpoint:init(DbIndexDir, Check);                 
@@ -89,8 +90,8 @@ handle_call({index, DbName}, _From, S) ->
     {Next, {Dir1, Cont1}} = indexer_checkpoint:resume(DbIndexDir),
     io:format("resuming checkpoint:~p~n",[Cont1]),
     {reply, ok, S#env{dbidxdir=Dir1,
-                      dbnam=element(1, Cont1),
-                      idx=list_to_binary(binary_to_list(element(1, Cont1)) ++ "-idx"),
+                      dbnam=DbName,
+                      idx=DbIndexName,
                       cont=Cont1,
                       nextCP=Next}
     };

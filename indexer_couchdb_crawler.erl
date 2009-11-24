@@ -10,13 +10,15 @@
 -module(indexer_couchdb_crawler).
 %%
 %%
--export([start/1, next/1, lookup_indices/2, write_indices/3]).
+-export([start/2, next/1, lookup_indices/2, write_indices/3]).
 
 -include("../couchdb/src/couchdb/couch_db.hrl").
 
--define(BATCH_SIZE, 2000).
+-define(BATCH_SIZE, 2).
 
-start(DbName) ->
+start(DbName, [{reset, DbIndexName}]) ->
+    hovercraft:delete_db(DbIndexName),
+    hovercraft:create_db(DbIndexName),    
     {DbName, 0}.
 
 next({DbName, StartId}) ->
@@ -45,20 +47,26 @@ get_all_docs(DbName, Options) ->
                                                 lists:append([element(1, Key)]
                                                              ,element(2, Acc))}}
                                   end
-                          end, {?BATCH_SIZE,[]}, Options),
+                          end, {?BATCH_SIZE + 1,[]}, Options),
     Docs = element(2,Result),
 
+    Bool = length(Docs) < ?BATCH_SIZE + 1,
+
     case length(Docs) of
-        1 -> [];
-        _ -> {hd(Docs),
-              lists:map(fun(Id) ->
-                                try
-                                    {ok, Doc} = hovercraft:open_doc(DbName, Id),
-                                    Doc
-                                catch
-                                    _:_ -> []
-                                end                          
-                        end, lists:reverse(Docs))}
+        0 -> [];
+        _ -> ReturnDocs = 
+                 lists:map(fun(Id) ->
+                                   try
+                                       {ok, Doc} = hovercraft:open_doc(DbName, Id),
+                                       Doc
+                                   catch
+                                       _:_ -> []
+                                   end                          
+                           end, lists:reverse(Docs)), 
+             case Bool of
+                 true -> {done, ReturnDocs};
+                 _ -> {hd(Docs), ReturnDocs}                         
+             end 
     end.
 
 lookup_doc(Id, DbName) ->

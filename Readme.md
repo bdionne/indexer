@@ -20,11 +20,12 @@ This directory is used <a href="http://github.com/bdionne/indexer/blob/master/in
 
     ERL_FLAGS='-sname couch@localhost -pa ../indexer' ./utils/run -i
 
-assuming hovercraft is compiled and on the path. The other thing you need is an empty db named foo-idx for each db foo you wish to index.
-After starting couch:
+assuming hovercraft is compiled and on the path.
 
     indexer:start().
     indexer:index("biomedgt").
+
+It creates a new database, .eg. biomedgt-idx to store the index
     
 
 And with luck you see these <a href="http://gist.github.com/241278">messages</a>. While it's running you can search:
@@ -37,7 +38,7 @@ It takes a checkpoint after indexing every n docs, so you can stop() and then ca
 
 ## Motivation
 
-I think Lucene is pretty much state of the art these days in text indexing but I've been thinking it'd be nice to have something more native.
+I think Lucene is pretty much state of the art these days for Java-based text indexing but I've been thinking it'd be nice to have something more native to CouchDB and have been curious as to how well Erlang can handle this. 
 
 
 
