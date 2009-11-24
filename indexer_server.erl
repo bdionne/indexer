@@ -90,7 +90,7 @@ handle_call({index, DbName}, _From, S) ->
     {Next, {Dir1, Cont1}} = indexer_checkpoint:resume(DbIndexDir),
     io:format("resuming checkpoint:~p~n",[Cont1]),
     {reply, ok, S#env{dbidxdir=Dir1,
-                      dbnam=DbName,
+                      dbnam=list_to_binary(DbName),
                       idx=DbIndexName,
                       cont=Cont1,
                       nextCP=Next}
