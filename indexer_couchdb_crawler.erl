@@ -24,6 +24,7 @@ start(DbName, [{reset, DbIndexName}]) ->
 next({DbName, StartId}) ->
     Docs = case StartId of
                0 -> get_all_docs(DbName, []);
+               done -> [];
                _ -> get_all_docs(DbName, [{start_key, StartId}])
            end,           
     case Docs of
