@@ -14,7 +14,7 @@
 
 -include("../couchdb/src/couchdb/couch_db.hrl").
 
--define(BATCH_SIZE, 2).
+-define(BATCH_SIZE, 1000).
 
 start(DbName, [{reset, DbIndexName}]) ->
     hovercraft:delete_db(DbIndexName),
@@ -62,10 +62,10 @@ get_all_docs(DbName, Options) ->
                                    catch
                                        _:_ -> []
                                    end                          
-                           end, lists:reverse(Docs)), 
+                           end, Docs), 
              case Bool of
                  true -> {done, ReturnDocs};
-                 _ -> {hd(Docs), ReturnDocs}                         
+                 _ -> {hd(Docs), tl(lists:reverse(ReturnDocs))}                         
              end 
     end.
 
