@@ -10,7 +10,7 @@
 -module(indexer_couchdb_crawler).
 %%
 %%
--export([start/2, next/1, lookup_indices/2, write_indices/3]).
+-export([start/2, next/1, get_doc_infos/2, lookup_indices/2, write_indices/3]).
 
 -include("../couchdb/src/couchdb/couch_db.hrl").
 -include("indexer.hrl").
@@ -32,18 +32,29 @@ next({DbName, StartId}) ->
     case Docs of
         [] -> done;
         {Cont, Docs1} -> {docs, Docs1, {DbName, Cont}}
-    end.   
+    end.
 
-get_all_docs(DbName, Options) ->
+open_by_id_btree(DbName) ->
     {ok, #db{fd=Fd}} = hovercraft:open_db(DbName),
     {ok, Header} = couch_file:read_header(Fd),
     {ok, IdBtree} = 
         couch_btree:open(Header#db_header.fulldocinfo_by_id_btree_state, Fd,
-                         []),    
+                         []),
+    IdBtree.
+    
+
+get_doc_infos(DbName, Ids) ->
+    IdBtree = open_by_id_btree(DbName),
+    {ok, Docs, _} = couch_btree:query_modify(IdBtree, Ids, [], []),
+    Docs.    
+    
+
+get_all_docs(DbName, Options) ->
+    IdBtree = open_by_id_btree(DbName),       
     {ok, _, Result} = 
         couch_btree:foldl(IdBtree,
                           fun(Key, Acc) ->
-                                  ?LOG(?DEBUG, "the key: ~p the acc: ~p ~n",[element(1,Key), Acc]),
+                                  %%?LOG(?DEBUG, "the key: ~p the acc: ~p ~n",[element(1,Key), Acc]),
                                   case element(1, Acc) of
                                       0 -> {stop, Acc};
                                       _ -> 
@@ -58,6 +69,7 @@ get_all_docs(DbName, Options) ->
     case length(Docs) of
         0 -> [];
         _ -> ReturnDocs = 
+                 %% there must be a better way to combine this with the foldl in the previous step.
                  lists:map(fun(Id) ->
                                    try
                                        {ok, Doc} = hovercraft:open_doc(DbName, Id),
@@ -93,13 +105,13 @@ write_indices(Word, Vals, DbName) ->
         {ok, Doc} -> 
             Props = element(1, Doc),
             Indices = proplists:get_value(<<"indices">>, Props),
-            ?LOG(?DEBUG,"the current indices ~p ~n",[Indices]),
+            %%?LOG(?DEBUG,"the current indices ~p ~n",[Indices]),
             NewProps = proplists:delete(<<"indices">>, Props),
-            ?LOG(?DEBUG,"props after deleting ~p ~n",[NewProps]),
+            %%?LOG(?DEBUG,"props after deleting ~p ~n",[NewProps]),
             NewDoc = 
                 {lists:append(NewProps, 
                               [{<<"indices">>,lists:append(Indices, Vals)}] )},
-            ?LOG(?DEBUG,"new props ~p ~n",[NewDoc]),
+            %%?LOG(?DEBUG,"new props ~p ~n",[NewDoc]),
             hovercraft:save_doc(DbName, NewDoc);
         not_found -> 
             NewDoc = {[{<<"_id">>, list_to_binary(Word)},

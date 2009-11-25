@@ -13,6 +13,8 @@
 	 mapreduce/4, search/4]).
 -import(lists, [filter/2, foreach/2, map/2, reverse/1]).
 
+-include("indexer.hrl").
+
 foreach_word_in_string(Str, F, Acc) ->
     case get_word(Str) of
 	no -> 
@@ -65,7 +67,7 @@ reduce(Parent, F1, F2, Acc0, L) ->
 		    spawn_link(fun() -> do_job(ReducePid, F1, X) end)
 	    end, L),
     N = length(L),
-    io:format("spawned ~w processes ~n",[N]), 
+    ?LOG(?DEBUG, "spawned ~w processes ~n",[N]), 
     %% make a dictionary to store the Keys
     Dict0 = dict:new(),
     %% Wait for N Map processes to terminate
@@ -118,6 +120,7 @@ search(Str, Ets, DbName, Idx) ->
 		N when N > 100 ->
 		    tooMany;
 		_ ->
+                    %%indexer_couchdb_crawler:get_docs(DbName, Indices1)
 		    map(fun(I) -> hovercraft:open_doc(DbName, I) end, Indices1)
 	    end
     end.

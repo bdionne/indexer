@@ -33,6 +33,7 @@ stop() ->
 
 worker() ->
     possibly_stop(),
+    ?LOG(?DEBUG, "retrieving next batch ~n",[]),
     case indexer_server:next_docs() of
 	{ok, Docs} ->            
 	    index_these_docs(Docs),
