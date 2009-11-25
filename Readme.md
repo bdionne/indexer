@@ -16,7 +16,7 @@ But if you do it's not too hard. You need a recent copy of hovercraft in your co
 
     mkdir checkpoints
 
-This directory is used <a href="http://github.com/bdionne/indexer/blob/master/indexer.erl#L16">here</a> if you want to move things around. I then typically start couchdb like so:
+This directory is used <a href="http://github.com/bdionne/indexer/blob/master/indexer.erl#L18">here</a> if you want to move things around. I then typically start couchdb like so:
 
     ERL_FLAGS='-sname couch@localhost -pa ../indexer' ./utils/run -i
 
