@@ -28,25 +28,32 @@
 
 -export([init/1, handle_call/3, handle_cast/2, terminate/2]).
 -import(filename, [join/2]).
+-include("indexer.hrl").
 
 start(Dir) ->
-    io:format("starting ~p ~p~n",[?MODULE, Dir]),
+    ?LOG(?DEBUG, "starting ~p ~p~n", [?MODULE, Dir]),
     gen_server:start({local,?MODULE}, ?MODULE, Dir, []).
 
 schedule_stop() ->
-    gen_server:call(?MODULE, schedule_stop).
+    Check = gen_server:call(?MODULE, schedule_stop),
+    case Check of
+        ack -> ack;
+        %% index is not running go ahead and stop now
+        norun -> stop()
+    end.
 
 should_i_stop() ->
     gen_server:call(?MODULE, should_i_stop).
 
 stop() ->
-    gen_server:cast(?MODULE, stop).
+     gen_server:cast(?MODULE, stop).
 
 
 next_docs()   -> gen_server:call(?MODULE, next_docs, infinity).
 checkpoint() -> gen_server:call(?MODULE, checkpoint).
 outdir()     -> gen_server:call(?MODULE, outdir).
-ets_table()  -> gen_server:call(?MODULE, ets_table).    
+ets_table()  -> gen_server:call(?MODULE, ets_table).
+    
 search(Str)  -> gen_server:call(?MODULE, {search, Str}).
 
 index(DbName) ->
@@ -82,13 +89,13 @@ handle_call({index, DbName}, _From, S) ->
 	{ok, []} ->
 	    Cont = indexer_couchdb_crawler:start(list_to_binary(DbName),[{reset, DbIndexName}]),
 	    Check = {DbIndexDir, Cont},
-	    io:format("creating checkpoint:~p~n",[Check]),
+	    ?LOG(?INFO, "creating checkpoint:~p~n", [Check]),
 	    indexer_checkpoint:init(DbIndexDir, Check);                 
 	_ -> ok
     end,
 
     {Next, {Dir1, Cont1}} = indexer_checkpoint:resume(DbIndexDir),
-    io:format("resuming checkpoint:~p~n",[Cont1]),
+    ?LOG(?INFO, "resuming checkpoint:~p~n",[Cont1]),
     {reply, ok, S#env{dbidxdir=Dir1,
                       dbnam=list_to_binary(DbName),
                       idx=DbIndexName,
@@ -101,24 +108,22 @@ handle_call(next_docs, _From, S) ->
     Cont = S#env.cont,
     case indexer_couchdb_crawler:next(Cont) of
 	{docs, Docs, ContToCkP} ->
+            ?LOG(?DEBUG, "checking the values in next docs ~p ~n",[ContToCkP]),
 	    {reply, {ok, Docs}, S#env{chkp=ContToCkP}};
 	done ->
 	    {reply, done, S}
     end;
 handle_call(checkpoint, _From, S) ->
-    case S#env.chkp of
-        done ->
-	    {reply, done, S};
-	Cont1 ->
-            Next = S#env.nextCP,
-	    DbIndexDir = S#env.dbidxdir,
-            Next1 = indexer_checkpoint:checkpoint(Next, {DbIndexDir, Cont1}),
-	    S1 = S#env{nextCP = Next1, cont=Cont1},
-	    {reply, ok, S1}
-	
-    end;
+    Next = S#env.nextCP,
+    DbIndexDir = S#env.dbidxdir,
+    Next1 = indexer_checkpoint:checkpoint(Next, {DbIndexDir, S#env.chkp}),
+    S1 = S#env{nextCP = Next1, cont=S#env.chkp},
+    {reply, ok, S1};
 handle_call(schedule_stop, _From, S) ->
-    {reply, ack, S#env{stop=true}};
+    case S#env.chkp of
+       {_, done} -> {reply, norun, S};
+        _ -> {reply, ack, S#env{stop=true}}
+    end;
 handle_call({search, Str}, _From,S) ->
     Result = indexer_misc:search(Str, S#env.ets, S#env.dbnam, S#env.idx),
     {reply, Result, S};
@@ -138,7 +143,7 @@ handle_cast(stop, S) ->
 terminate(Reason, S) ->
     Ets = S#env.ets,
     indexer_trigrams:close(Ets),
-    io:format("stopping ~p~n",[Reason]).
+    ?LOG(?INFO, "stopping ~p~n",[Reason]).
 
     
 

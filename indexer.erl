@@ -13,6 +13,8 @@
 
 -import(lists, [map/2]).
 
+-include("indexer.hrl").
+
 output_dir()    -> "/Users/bitdiddle/emacs/indexer/checkpoints".
 
 start() ->
@@ -26,7 +28,7 @@ search(Str) ->
     indexer_server:search(Str).
 
 stop() ->
-    io:format("Scheduling a stop~n"),
+    ?LOG(?INFO, "Scheduling a stop~n", []),
     indexer_server:schedule_stop().
 
 worker() ->
@@ -36,8 +38,8 @@ worker() ->
 	    index_these_docs(Docs),
 	    indexer_server:checkpoint(),
 	    possibly_stop(),
-            io:format("indexed another ~w ~n",[length(Docs)]),
-	    sleep(5000),
+            ?LOG(?INFO, "indexed another ~w ~n", [length(Docs)]),
+	    %%sleep(5000),
 	    worker();
 	done ->
 	    true
@@ -46,7 +48,7 @@ worker() ->
 possibly_stop() ->
     case indexer_server:should_i_stop() of
 	true ->
-	    io:format("Stopping~n"),
+	    ?LOG(?INFO, "Stopping~n", []),
 	    indexer_server:stop(),
 	    exit(stopped);
     	false ->
