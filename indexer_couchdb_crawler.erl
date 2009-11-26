@@ -10,7 +10,7 @@
 -module(indexer_couchdb_crawler).
 %%
 %%
--export([start/2, next/1, get_doc_infos/2, lookup_indices/2, write_indices/3]).
+-export([start/2, next/1, get_doc_infos/2, get_changes_since/2, lookup_indices/2, write_indices/3]).
 
 -include("../couchdb/src/couchdb/couch_db.hrl").
 -include("indexer.hrl").
@@ -46,7 +46,14 @@ open_by_id_btree(DbName) ->
 get_doc_infos(DbName, Ids) ->
     IdBtree = open_by_id_btree(DbName),
     {ok, Docs, _} = couch_btree:query_modify(IdBtree, Ids, [], []),
-    Docs.    
+    Docs. 
+
+get_changes_since(DbName, SeqNum) ->   
+    {ok, #db{update_seq=LastSeq}=Db} = hovercraft:open_db(DbName),
+    ?LOG(?DEBUG,"last update sequences id is: ~p",[LastSeq]),
+    couch_db:changes_since(Db, all_docs, SeqNum, fun(DocInfos, Acc) ->
+                                                         {ok, lists:append(Acc, DocInfos)} end,
+                           [],[]).
     
 
 get_all_docs(DbName, Options) ->
