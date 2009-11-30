@@ -1,5 +1,3 @@
-My son, a pianist, was home for the weekend, filling the house with beautiful Shostakovich fugues and Beethoven sonatas, so I decided to relax and hack on the couch.
-
 ## Prototyping FTI for CouchDB databases in CouchDB
 
 Chapter 20 of Joe Armstrong's <a href="http://www.pragprog.com/titles/jaerlang/programming-erlang">Erlang book</a> provides a nice example of the use of processes to do full text indexing with map/reduce. The essential idea is to spawn a process for each document to index and let the reduce function populate the inverted index as it collects the results of the map phase. I recently heard mention of <a href="http://dukesoferl.blogspot.com/2009/07/osmos.html">osmos</a> in a talk from the NoSQL east conference and it struck me as the ideal data structure for storing an inverted index, particularly since it supports user-defined merging. So when one encounters the word Neoplasm in multiple docs one can just write the key/value to the store and let a defined merging function sort things out.
@@ -12,20 +10,16 @@ It runs in the same VM with couchdb, using <a href="http://github.com/jchris/hov
 
 ## Don't try this at home
 
-But if you do it's not too hard. You need a recent copy of hovercraft in your couchdb install directory. For best results install this project in a sibling directory to couchdb. In the top level of indexer:
-
-    mkdir checkpoints
-
-This directory is used <a href="http://github.com/bdionne/indexer/blob/master/indexer.erl#L18">here</a> if you want to move things around. I then typically start couchdb like so:
+But if you do it's not too hard. You need a recent copy of hovercraft in your couchdb install directory. For best results install this project in a sibling directory to couchdb. I typically start couchdb with:
 
     ERL_FLAGS='-sname couch@localhost -pa ../indexer' ./utils/run -i
 
-assuming hovercraft is compiled and on the path.
+assuming hovercraft is compiled and on the path. If indexer is not a subling directory adjust the -pa accordingly
 
     indexer:start().
     indexer:index("biomedgt").
 
-It creates a new database, .eg. biomedgt-idx to store the index
+It creates a new database, .eg. biomedgt-idx to store the index. It also store checkpoint information in the index db for help in the event of restart
     
 
 And with luck you see these <a href="http://gist.github.com/241278">messages</a>. While it's running you can search:

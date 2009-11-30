@@ -10,7 +10,7 @@
 -module(indexer_couchdb_crawler).
 %%
 %%
--export([start/2, next/1, get_doc_infos/2, get_changes_since/2, lookup_indices/2, write_indices/3]).
+-export([start/2, next/1, get_doc_infos/2, db_exists/1, store_chkp/3, get_changes_since/2, lookup_doc/2, lookup_indices/2, write_indices/3]).
 
 -include("../couchdb/src/couchdb/couch_db.hrl").
 -include("indexer.hrl").
@@ -32,6 +32,13 @@ next({DbName, StartId}) ->
     case Docs of
         [] -> done;
         {Cont, Docs1} -> {docs, Docs1, {DbName, Cont}}
+    end.
+
+db_exists(DbName) ->
+    case hovercraft:open_db(DbName) of
+        {ok, _} ->
+            true;
+        _ -> false
     end.
 
 open_by_id_btree(DbName) ->
@@ -97,6 +104,22 @@ lookup_doc(Id, DbName) ->
         hovercraft:open_doc(DbName, Id)
     catch
         _:_ -> not_found
+    end.
+
+store_chkp(DocId, B, DbName) ->
+    case lookup_doc(DocId, DbName) of
+        {ok, Doc} ->
+            Props = element(1, Doc),
+            NewProps = proplists:delete(<<"chkp">>, Props),
+            NewDoc = 
+                {lists:append(NewProps, 
+                              [{<<"chkp">>,B}] )},
+            hovercraft:save_doc(DbName, NewDoc);
+        not_found -> 
+            
+            NewDoc = {[{<<"_id">>, DocId},
+                       {<<"chkp">>, B}]},
+            hovercraft:save_doc(DbName, NewDoc)
     end.
     
 

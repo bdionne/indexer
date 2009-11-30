@@ -7,68 +7,69 @@
 %%  Visit http://www.pragmaticprogrammer.com/titles/jaerlang for more book information.
 %%
 %%  Original copyright: "(c) 2007 armstrongonsoftware"
+%%
+%% 12/1/2009 modified to store checkpoint in CouchDB index database
+%%
+%%% Copyright (C) 2009   Dionne Associates, LLC.
 %%---
 -module(indexer_checkpoint).
 
--export([init/2, resume/1, checkpoint/2]).
--import(filelib, [is_file/1]).
+-export([init/2, resume/1, checkpoint/2, test/0]).
 
-%%% init(Dir, Term) -> true.   %% define a checkpoitn dirextory and term X
-%%  resume(Dir) -> {Check, X}  %% Check is used in the *next* call to checkpoint
+-include("indexer.hrl").
+%%-import(filelib, [is_file/1]).
+
+%%% init(DbIndexName, Term) -> true.   %% define initialize checkpoints in the index db
+%%  resume(DbIndexName) -> {Check, X}  %% Check is used in the *next* call to checkpoint
 %%                             %% X is a term
 %%  checkpoint(Check, X) ->    %% Set a new checkpoint
-%%     Check'                           
-
-init(Dir, X) ->
-    One = Dir ++ "/1.check",
-    Two = Dir ++ "/2.check",
-    case is_file(One) or is_file(Two) of
+%%     Check'
+init(DbIndexName, X) ->
+    One = <<"check1">>,
+    Two = <<"check2">>,
+    case already_exists(One, DbIndexName) or already_exists(Two, DbIndexName) of
 	true ->
 	    exit(eBadInit);
 	false ->
-	    checkpoint({Dir, 1}, X),
-	    checkpoint({Dir, 2}, X)
+	    checkpoint({DbIndexName, 1}, X),
+	    checkpoint({DbIndexName, 2}, X)
     end.
 
-%% resume(Dir) -> {NextCheckPointFile, X} | error
+already_exists(DocId, DbName) ->
+    CheckExists = indexer_couchdb_crawler:lookup_doc(DocId, DbName),
+    case CheckExists of
+        not_found ->
+            false;
+        {ok, _} ->
+            true
+    end.
 
-resume(Dir) ->
-    R1 = recover(Dir ++ "/1.check"),
-    R2 = recover(Dir ++ "/2.check"),
+resume(DbIndexName) ->
+    R1 = recover(DbIndexName, <<"check1">>),
+    R2 = recover(DbIndexName, <<"check2">>),
     case {R1, R2} of
 	{error, error}               -> error;
-	{error, _}                   -> {{Dir,1}, element(2, R2)};
-	{_, error}                   -> {{Dir,2}, element(2, R1)};
-	{{T1,X},{T2,_}} when T1 > T2 -> {{Dir,2}, X};
-	{_,{_,X}}                    -> {{Dir,1}, X}
+	{error, _}                   -> {{DbIndexName,1}, element(2, R2)};
+	{_, error}                   -> {{DbIndexName,2}, element(2, R1)};
+	{{T1,X},{T2,_}} when T1 > T2 -> {{DbIndexName,2}, X};
+	{_,{_,X}}                    -> {{DbIndexName,1}, X}
     end.
 
-recover(File) ->
-    case file:read_file(File) of
-	{ok, Bin} when size(Bin) > 32 ->
-	    {B1,B2} = split_binary(Bin, 16),
-	    case bin_to_md5(B2) of
-		B1 ->
-		    binary_to_term(B2);
-		_ ->
-		    error
-	    end;
-	_ ->
-	    error
-    end.
+recover(DbIndexName, ChkpNameBin) ->
+    {ok, ChkpDoc} = indexer_couchdb_crawler:lookup_doc(ChkpNameBin, DbIndexName),
+    proplists:get_value(<<"chkp">>,element(1,ChkpDoc)).
 
-checkpoint({Dir, Next}, X) ->
-    File = Dir ++ "/" ++ integer_to_list(Next) ++ ".check",
+checkpoint({DbIndexName, Next}, X) ->
+    ?LOG(?DEBUG, "creating checkpoint for:~p ~p ~p ~n", [DbIndexName, Next, X]),
+    DocId = list_to_binary("check" ++ integer_to_list(Next)),
     Time = now(),
-    B = term_to_binary({Time, X}),
-    CheckSum = bin_to_md5(B),
-    ok = file:write_file(File, [CheckSum,B]),
-    {Dir, 3-Next}.
-    
-bin_to_md5(Bin) ->
-    C1 = erlang:md5_init(),
-    C2 = erlang:md5_update(C1, Bin),
-    erlang:md5_final(C2).
+    B = {Time, X},
+    indexer_couchdb_crawler:store_chkp(DocId, B, DbIndexName),
+    {DbIndexName, 3-Next}.
+
+test() ->
+    Cont = indexer_couchdb_crawler:start(<<"fti">>,[{reset, <<"fti-idx">>}]),
+    init(<<"fti-idx">>,Cont).
 
 
 

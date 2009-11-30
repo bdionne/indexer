@@ -15,14 +15,12 @@
 
 -include("indexer.hrl").
 
-output_dir()    -> "/Users/bitdiddle/emacs/indexer/checkpoints".
-
-start() ->
-    indexer_server:start(output_dir()).
+start() -> ok.
 
 index(DbName) ->
-    indexer_server:index(DbName),
+    indexer_server:start(DbName),
     spawn_link(fun() -> worker() end).
+    
 
 search(Str) ->
     indexer_server:search(Str).
@@ -43,6 +41,8 @@ worker() ->
 	    %%sleep(5000),
 	    worker();
 	done ->
+            %% what we need to do here is go into polling mode
+            %% and start polling for new updates to the db
 	    true
     end.
 
@@ -72,3 +72,5 @@ sleep(T) ->
     receive
     after T -> true
     end.
+
+
