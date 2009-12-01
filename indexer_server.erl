@@ -11,51 +11,50 @@
 %%---
 -module(indexer_server).
 
--export([start/1,
-	 next_docs/0,
-	 ets_table/0, 
-	 checkpoint/0,
-	 schedule_stop/0,
-	 search/1,
-         write_index/2,
-	 should_i_stop/0,
-	 stop/0]).
+-export([next_docs/1,
+	 ets_table/1, 
+	 checkpoint/1,
+	 schedule_stop/1,
+	 search/2,
+         write_index/3,
+	 should_i_stop/1,
+	 stop/1]).
 
 -export([init/1, handle_call/3, handle_cast/2, terminate/2]).
 -import(filename, [join/2]).
 -include("indexer.hrl").
 
-start(DbName) ->
-    ?LOG(?DEBUG, "starting ~p ~n", [?MODULE]),
-    gen_server:start({local,?MODULE}, ?MODULE, [DbName], []).
+%% start(DbName) ->
+%%     ?LOG(?DEBUG, "starting ~p ~n", [?MODULE]),
+%%     gen_server:start({local,?MODULE}, ?MODULE, [DbName], []).
 
-schedule_stop() ->
-    Check = gen_server:call(?MODULE, schedule_stop),
+schedule_stop(Pid) ->
+    Check = gen_server:call(Pid, schedule_stop),
     case Check of
         ack -> ack;
         %% index is not running go ahead and stop now
-        norun -> stop()
+        norun -> stop(Pid)
     end.
 
-should_i_stop() ->
-    gen_server:call(?MODULE, should_i_stop).
+should_i_stop(Pid) ->
+    gen_server:call(Pid, should_i_stop).
 
-stop() ->
-     gen_server:cast(?MODULE, stop).
+stop(Pid) ->
+     gen_server:cast(Pid, stop).
 
 
 
-next_docs()   -> gen_server:call(?MODULE, next_docs, infinity).
-checkpoint() -> gen_server:call(?MODULE, checkpoint).
-ets_table()  -> gen_server:call(?MODULE, ets_table).
+next_docs(Pid)   -> gen_server:call(Pid, next_docs, infinity).
+checkpoint(Pid) -> gen_server:call(Pid, checkpoint).
+ets_table(Pid)  -> gen_server:call(Pid, ets_table).
     
-search(Str)  -> gen_server:call(?MODULE, {search, Str}).
+search(Pid, Str)  -> gen_server:call(Pid, {search, Str}).
 
 %%index(DbName) ->
   %%  gen_server:call(?MODULE, {index, DbName}).
 
-write_index(Key, Vals) ->
-    gen_server:call(?MODULE, {write, Key, Vals}).
+write_index(Pid, Key, Vals) ->
+    gen_server:call(Pid, {write, Key, Vals}).
 
 -record(env,
         {ets, 
@@ -88,29 +87,6 @@ init(DbName) ->
                       idx=DbIndexName,
                       cont=Cont1,
                       nextCP=Next}}.
-
-
-
-%% handle_call({index, DbName}, _From, S) ->
-%%     DbIndexName = list_to_binary(DbName ++ "-idx"),
-%%     CheckIndexDbExists = indexer_couchdb_crawler:db_exists(DbIndexName),
-
-%%     case CheckIndexDbExists of
-%%         true -> ok;
-%%         false ->
-%%             Cont = indexer_couchdb_crawler:start(list_to_binary(DbName),[{reset, DbIndexName}]),
-%% 	    Check = {DbIndexName, Cont},
-%% 	    ?LOG(?INFO, "creating checkpoint:~p~n", [Check]),
-%% 	    indexer_checkpoint:init(DbIndexName, Check)
-%%     end,
-    
-%%     {Next, {_, Cont1}} = indexer_checkpoint:resume(DbIndexName),
-%%     ?LOG(?INFO, "resuming checkpoint: ~p ~p~n",[Next, Cont1]),
-%%     {reply, ok, S#env{dbnam=list_to_binary(DbName),
-%%                       idx=DbIndexName,
-%%                       cont=Cont1,
-%%                       nextCP=Next}
-%%     };
 
 handle_call(ets_table, _From, S) ->
     {reply, S#env.ets, S};
