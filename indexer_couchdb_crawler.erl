@@ -10,7 +10,16 @@
 -module(indexer_couchdb_crawler).
 %%
 %%
--export([start/2, next/1, get_doc_infos/2, db_exists/1, store_chkp/3, get_changes_since/2, lookup_doc/2, lookup_indices/2, write_indices/3]).
+-export([start/2, 
+         next/1,
+         db_exists/1, 
+         store_chkp/3,
+         read_last_seq/1,
+         write_last_seq/2,
+         get_changes_since/2, 
+         lookup_doc/2, 
+         lookup_indices/2, 
+         write_indices/3]).
 
 -include("../couchdb/src/couchdb/couch_db.hrl").
 -include("indexer.hrl").
@@ -19,7 +28,9 @@
 
 start(DbName, [{reset, DbIndexName}]) ->
     hovercraft:delete_db(DbIndexName),
-    hovercraft:create_db(DbIndexName),    
+    hovercraft:create_db(DbIndexName), 
+    {ok, #db{update_seq=LastSeq}} = hovercraft:open_db(DbName),
+    write_last_seq(DbIndexName, LastSeq),
     {DbName, 0}.
 
 next({DbName, StartId}) ->
@@ -50,17 +61,34 @@ open_by_id_btree(DbName) ->
     IdBtree.
     
 
-get_doc_infos(DbName, Ids) ->
-    IdBtree = open_by_id_btree(DbName),
-    {ok, Docs, _} = couch_btree:query_modify(IdBtree, Ids, [], []),
-    Docs. 
-
 get_changes_since(DbName, SeqNum) ->   
     {ok, #db{update_seq=LastSeq}=Db} = hovercraft:open_db(DbName),
     ?LOG(?DEBUG,"last update sequences id is: ~p ~n",[LastSeq]),
-    couch_db:changes_since(Db, all_docs, SeqNum, fun(DocInfos, Acc) ->
+    {ok, DocInfos} = couch_db:changes_since(Db, all_docs, SeqNum, fun(DocInfos, Acc) ->
                                                          {ok, lists:append(Acc, DocInfos)} end,
-                           [],[]).
+                           [],[]),
+    {InsIds, UpdIds, DelIds} = lists:foldl(fun(DocInfo, {Inserts, Updates, Deletes}) ->
+                        {doc_info, Id, _, [{rev_info,{Rev,_},_,Deleted,_}]}=DocInfo,
+                        case Rev of
+                            1 -> {[Id | Inserts],Updates, Deletes};
+                            _ -> case Deleted of
+                                     true -> {Inserts, Updates, [Id | Deletes]};
+                                     _ -> {Inserts, [Id | Updates], Deletes}
+                                 end
+                        end
+                end,{[],[],[]},DocInfos),
+    {get_docs(InsIds, DbName), UpdIds, DelIds, LastSeq}.
+
+get_docs(DocIdList, DbName) ->
+    lists:map(fun(Id) -> 
+                      {ok, Doc} = lookup_doc(Id, DbName),
+                      Doc
+              end,
+              DocIdList).
+                      
+                           
+
+
     
 
 get_all_docs(DbName, Options) ->
@@ -121,6 +149,25 @@ store_chkp(DocId, B, DbName) ->
                        {<<"chkp">>, B}]},
             hovercraft:save_doc(DbName, NewDoc)
     end.
+
+write_last_seq(DbName, LastSeq) ->
+    NewDoc =
+        case lookup_doc(<<"last_seq">>, DbName) of
+            {ok, Doc} ->
+                Props = element(1, Doc),
+                NewProps = proplists:delete(<<"value">>, Props),
+                {lists:append(NewProps, 
+                              [{<<"value">>,LastSeq}] )};
+            not_found ->
+                {[{<<"_id">>, <<"last_seq">>},
+                  {<<"value">>, LastSeq}]}
+        end,
+    hovercraft:save_doc(DbName, NewDoc).
+
+read_last_seq(DbName) ->
+    {ok, Doc} = lookup_doc(<<"last_seq">>, DbName),
+    proplists:get_value(<<"value">>,element(1,Doc)).
+    
     
 
 lookup_indices(Word, DbName) ->

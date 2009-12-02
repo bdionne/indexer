@@ -12,8 +12,10 @@
 -module(indexer_server).
 
 -export([next_docs/1,
+         get_changes/1,
 	 ets_table/1, 
 	 checkpoint/1,
+         checkpoint/3,
 	 schedule_stop/1,
 	 search/2,
          write_index/3,
@@ -38,10 +40,14 @@ should_i_stop(Pid) ->
 stop(Pid) ->
      gen_server:cast(Pid, stop).
 
-
-
 next_docs(Pid)   -> gen_server:call(Pid, next_docs, infinity).
+get_changes(Pid) ->
+     gen_server:call(Pid, changes, infinity).
+
 checkpoint(Pid) -> gen_server:call(Pid, checkpoint).
+checkpoint(Pid, changes, LastSeq) ->
+    gen_server:call(Pid, {checkpoint, changes, LastSeq}).
+
 ets_table(Pid)  -> gen_server:call(Pid, ets_table).
     
 search(Pid, Str)  -> gen_server:call(Pid, {search, Str}).
@@ -91,6 +97,9 @@ handle_call(next_docs, _From, S) ->
 	done ->
 	    {reply, done, S}
     end;
+handle_call(changes, _From, S) ->
+    LastSeq = indexer_couchdb_crawler:read_last_seq(S#env.idx),
+    {reply, indexer_couchdb_crawler:get_changes_since(S#env.dbnam, LastSeq), S};    
 handle_call(checkpoint, _From, S) ->
     Next = S#env.nextCP,
     DbIndexName = S#env.idx,
@@ -98,6 +107,9 @@ handle_call(checkpoint, _From, S) ->
     ?LOG(?DEBUG, "the next checkpoint is ~p ~n",[Next1]),
     S1 = S#env{nextCP = Next1, cont=S#env.chkp},
     {reply, ok, S1};
+handle_call({checkpoint, changes, LastSeq}, _From, S) ->
+    indexer_couchdb_crawler:write_last_seq(S#env.idx, LastSeq),
+    {reply, ok, S};    
 handle_call(schedule_stop, _From, S) ->
     case S#env.chkp of
        {_, done} -> {reply, norun, S};

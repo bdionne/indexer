@@ -86,10 +86,28 @@ worker(Pid) ->
                 done ->
                     %% what we need to do here is go into polling mode
                     %% and start polling for new updates to the db
-                    true
+                    poll_for_changes(Pid)
             end
     end.
 
+poll_for_changes(Pid) ->
+    case possibly_stop(Pid) of
+        done ->
+             ok;
+        void -> 
+            ?LOG(?DEBUG, "polling for changes again ~n",[]),
+            {Inserts, _Updates, _Deletes, LastSeq} = indexer_server:get_changes(Pid),
+            %% first do inserts
+            index_these_docs(Pid,Inserts),
+            ?LOG(?INFO, "indexed another ~w ~n", [length(Inserts)]),
+            %% then deletes
+            %% then updates
+            indexer_server:checkpoint(Pid,changes,LastSeq),
+            sleep(60000),
+            poll_for_changes(Pid)
+    end.
+            
+                
 possibly_stop(Pid) ->
     case indexer_server:should_i_stop(Pid) of
 	true ->
