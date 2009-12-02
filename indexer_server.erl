@@ -19,6 +19,7 @@
 	 schedule_stop/1,
 	 search/2,
          write_index/3,
+         delete_index/3,
 	 should_i_stop/1,
 	 stop/1]).
 
@@ -54,6 +55,9 @@ search(Pid, Str)  -> gen_server:call(Pid, {search, Str}).
 
 write_index(Pid, Key, Vals) ->
     gen_server:call(Pid, {write, Key, Vals}).
+
+delete_index(Pid, Key, Vals) ->
+    gen_server:call(Pid, {delete, Key, Vals}).
 
 -record(env,
         {ets, 
@@ -122,6 +126,10 @@ handle_call({search, Str}, _From,S) ->
 handle_call({write, Key, Vals}, _From,S) ->
     Result = indexer_couchdb_crawler:write_indices(Key, Vals, S#env.idx),
     {reply, Result, S};
+handle_call({delete, Key, Vals}, _From,S) ->
+    Result = indexer_couchdb_crawler:delete_indices(Key, Vals, S#env.idx),
+    {reply, Result, S};
+
 
 handle_call(should_i_stop, _From, S) ->
     {reply, S#env.stop, S}.

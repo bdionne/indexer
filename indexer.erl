@@ -75,7 +75,7 @@ worker(Pid) ->
             ?LOG(?DEBUG, "retrieving next batch ~n",[]),
             case indexer_server:next_docs(Pid) of
                 {ok, Docs} ->            
-                    index_these_docs(Pid, Docs),
+                    index_these_docs(Pid, Docs, true),
                     indexer_server:checkpoint(Pid),
                     ?LOG(?INFO, "indexed another ~w ~n", [length(Docs)]),
                     case possibly_stop(Pid) of
@@ -96,11 +96,18 @@ poll_for_changes(Pid) ->
              ok;
         void -> 
             ?LOG(?DEBUG, "polling for changes again ~n",[]),
-            {Inserts, _Updates, _Deletes, LastSeq} = indexer_server:get_changes(Pid),
-            %% first do inserts
-            index_these_docs(Pid,Inserts),
+            {Deletes, Inserts, LastSeq} = indexer_server:get_changes(Pid),
+            %% first do the deletes BECAUSE they contain previous revisions
+            %% of docs for the updated case. When a doc has been added we simplying
+            %% updating the index by just doing a delete followed by an insertion
+            %% for the new versin of the doc
+            index_these_docs(Pid,Deletes,false),
+            ?LOG(?INFO, "indexed another ~w ~n", [length(Deletes)]),
+            % then do the inserts
+            index_these_docs(Pid,Inserts,true),
             ?LOG(?INFO, "indexed another ~w ~n", [length(Inserts)]),
-            %% then deletes
+            
+            
             %% then updates
             indexer_server:checkpoint(Pid,changes,LastSeq),
             sleep(60000),
@@ -119,16 +126,19 @@ possibly_stop(Pid) ->
 	    void
     end.
 
-index_these_docs(Pid, Docs) ->
+index_these_docs(Pid, Docs, InsertOrDelete) ->
     Ets = indexer_server:ets_table(Pid),
     F1 = fun(Pid1, Doc) -> indexer_words:do_indexing(Pid1, Doc, Ets) end,
-    F2 = fun(Key, Val, Acc) -> handle_result(Pid, Key, Val, Acc) end,
+    F2 = fun(Key, Val, Acc) -> handle_result(Pid, Key, Val, Acc, InsertOrDelete) end,
     indexer_misc:mapreduce(F1, F2, 0, Docs).
 
-handle_result(Pid, Key, Vals, Acc) ->
-    
-    indexer_server:write_index(Pid, Key, Vals),
-    
+handle_result(Pid, Key, Vals, Acc, InsertOrDelete) ->
+    case InsertOrDelete of
+        true ->
+            indexer_server:write_index(Pid, Key, Vals);
+        false ->
+            indexer_server:delete_index(Pid, Key, Vals)
+    end,    
     Acc + 1.
 
 sleep(T) ->

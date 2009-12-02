@@ -16,10 +16,13 @@
          store_chkp/3,
          read_last_seq/1,
          write_last_seq/2,
-         get_changes_since/2, 
+         get_changes_since/2,
+         get_previous_version/2,
+         get_deleted_docs/2,
          lookup_doc/2, 
          lookup_indices/2, 
-         write_indices/3]).
+         write_indices/3,
+         delete_indices/3]).
 
 -include("../couchdb/src/couchdb/couch_db.hrl").
 -include("indexer.hrl").
@@ -77,7 +80,29 @@ get_changes_since(DbName, SeqNum) ->
                                  end
                         end
                 end,{[],[],[]},DocInfos),
-    {get_docs(InsIds, DbName), UpdIds, DelIds, LastSeq}.
+    PrevVersDocs = get_previous_version(UpdIds, DbName),
+    {lists:append(get_deleted_docs(DelIds, DbName), PrevVersDocs), get_docs(lists:append(InsIds, UpdIds), DbName), LastSeq}.
+
+get_previous_version(Ids, DbName) ->
+    lists:map(fun(Id) ->
+                      {ok, Db} = hovercraft:open_db(DbName),
+                      DocWithRevs = couch_doc:to_json_obj(couch_httpd_db:couch_doc_open(Db, Id, nil, [revs]),[revs]),
+                      Revs = proplists:get_value(<<"_revisions">>,element(1,DocWithRevs)),
+                      PrevRevId = "1-" ++ binary_to_list(lists:nth(2, proplists:get_value(<<"ids">>,element(1,Revs)))),
+                      couch_doc:to_json_obj(couch_httpd_db:couch_doc_open(Db,Id,couch_doc:parse_rev(PrevRevId),[]),[])
+              end,Ids).
+    
+    
+
+get_deleted_docs(_DocIds, _DbName) ->
+    [].
+
+%%     {ok, Db} = hovercraft:open_db(DbName),
+%%     lists:map(fun(Id) ->
+%%                       CouchDoc = couch_httpd_db:couch_doc_open(Db, Id, nil, [deleted]),
+%%                       couch_doc:to_json_obj(CouchDoc, [])
+%%               end, DocIds).
+    
 
 get_docs(DocIdList, DbName) ->
     lists:map(fun(Id) -> 
@@ -194,6 +219,25 @@ write_indices(Word, Vals, DbName) ->
             NewDoc = {[{<<"_id">>, list_to_binary(Word)},
                        {<<"indices">>,Vals}]},
             hovercraft:save_doc(DbName, NewDoc)
+    end.
+
+delete_indices(Word, Vals, DbName) ->
+    %% see if entry already exists
+    case lookup_doc(list_to_binary(Word), DbName) of
+        {ok, Doc} -> 
+            Props = element(1, Doc),
+            Indices = proplists:get_value(<<"indices">>, Props),
+            NewIndices = lists:foldl(fun(Elem, Acc) ->
+                                             lists:delete(Elem, Acc)
+                                     end,Indices,Vals),
+            NewProps = proplists:delete(<<"indices">>, Props),
+            %%?LOG(?DEBUG,"props after deleting ~p ~n",[NewProps]),
+            NewDoc = 
+                {lists:append(NewProps, 
+                              [{<<"indices">>,NewIndices}])},
+            %%?LOG(?DEBUG,"new props ~p ~n",[NewDoc]),
+            hovercraft:save_doc(DbName, NewDoc);
+        not_found -> ok
     end.
     
     
