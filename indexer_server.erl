@@ -24,10 +24,6 @@
 -import(filename, [join/2]).
 -include("indexer.hrl").
 
-%% start(DbName) ->
-%%     ?LOG(?DEBUG, "starting ~p ~n", [?MODULE]),
-%%     gen_server:start({local,?MODULE}, ?MODULE, [DbName], []).
-
 schedule_stop(Pid) ->
     Check = gen_server:call(Pid, schedule_stop),
     case Check of
@@ -50,9 +46,6 @@ ets_table(Pid)  -> gen_server:call(Pid, ets_table).
     
 search(Pid, Str)  -> gen_server:call(Pid, {search, Str}).
 
-%%index(DbName) ->
-  %%  gen_server:call(?MODULE, {index, DbName}).
-
 write_index(Pid, Key, Vals) ->
     gen_server:call(Pid, {write, Key, Vals}).
 
@@ -68,9 +61,8 @@ write_index(Pid, Key, Vals) ->
 init(DbName) ->
     Tab = indexer_trigrams:open(),
     DbIndexName = list_to_binary(DbName ++ "-idx"),
-    CheckIndexDbExists = indexer_couchdb_crawler:db_exists(DbIndexName),
-
-    case CheckIndexDbExists of
+   
+    case indexer_couchdb_crawler:db_exists(DbIndexName) of
         true -> ok;
         false ->
             Cont = indexer_couchdb_crawler:start(list_to_binary(DbName),[{reset, DbIndexName}]),

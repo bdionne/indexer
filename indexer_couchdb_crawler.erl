@@ -57,7 +57,7 @@ get_doc_infos(DbName, Ids) ->
 
 get_changes_since(DbName, SeqNum) ->   
     {ok, #db{update_seq=LastSeq}=Db} = hovercraft:open_db(DbName),
-    ?LOG(?DEBUG,"last update sequences id is: ~p",[LastSeq]),
+    ?LOG(?DEBUG,"last update sequences id is: ~p ~n",[LastSeq]),
     couch_db:changes_since(Db, all_docs, SeqNum, fun(DocInfos, Acc) ->
                                                          {ok, lists:append(Acc, DocInfos)} end,
                            [],[]).

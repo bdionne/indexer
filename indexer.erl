@@ -10,7 +10,7 @@
 %%  Original copyright: "(c) 2007 armstrongonsoftware"
 %%---
 -module(indexer).
--export([start_link/0, stop/1, index/1, search/2]).
+-export([start_link/0, stop/1, start/1, search/2]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
@@ -28,8 +28,8 @@ start_link() ->
 init([]) ->    
     {ok, #state{dbs=ets:new(names_pids,[set])}}.
 
-index(DbName) ->
-    gen_server:call(?MODULE,{index, DbName}).    
+start(DbName) ->
+    gen_server:call(?MODULE,{start, DbName}).    
 
 search(DbName, Str) ->
     gen_server:call(?MODULE, {search, DbName, Str}).
@@ -38,9 +38,7 @@ stop(DbName) ->
     ?LOG(?INFO, "Scheduling a stop~n", []),
     gen_server:call(?MODULE, {stop, DbName}).
 
-
-
-handle_call({index, DbName}, _From, State) ->
+handle_call({start, DbName}, _From, State) ->
     {ok, Pid} = gen_server:start_link(indexer_server, [DbName], []),
     #state{dbs=Tab} = State,
     ets:insert(Tab,{DbName,Pid}),
@@ -50,10 +48,13 @@ handle_call({search, DbName, Str}, _From, State) ->
     #state{dbs=Tab} = State,
     [{DbName,Pid}] = ets:lookup(Tab,DbName),
     {reply, indexer_server:search(Pid, Str), State};
-handle_call({schedule_stop, DbName}, _From, State) ->
+handle_call({stop, DbName}, _From, State) ->
     #state{dbs=Tab} = State,
     [{DbName,Pid}] = ets:lookup(Tab,DbName),
-    {reply, indexer_server:schedule_stop(Pid), State}.
+    {reply, indexer_server:schedule_stop(Pid), State};
+handle_call({done, DbName}, _From, State) ->
+    #state{dbs=Tab} = State,
+    {reply, ets:delete(Tab,DbName), State}.
 
 handle_cast(_Msg, State) ->
     {noreply, State}.
@@ -67,30 +68,35 @@ terminate(_Reason, _State) ->
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
-
 worker(Pid) ->
-    possibly_stop(Pid),
-    ?LOG(?DEBUG, "retrieving next batch ~n",[]),
-    case indexer_server:next_docs(Pid) of
-	{ok, Docs} ->            
-	    index_these_docs(Pid, Docs),
-	    indexer_server:checkpoint(Pid),
-	    possibly_stop(Pid),
-            ?LOG(?INFO, "indexed another ~w ~n", [length(Docs)]),
-	    %%sleep(5000),
-	    worker(Pid);
-	done ->
-            %% what we need to do here is go into polling mode
-            %% and start polling for new updates to the db
-	    true
+    case possibly_stop(Pid) of
+        done -> ok;
+        void -> 
+            ?LOG(?DEBUG, "retrieving next batch ~n",[]),
+            case indexer_server:next_docs(Pid) of
+                {ok, Docs} ->            
+                    index_these_docs(Pid, Docs),
+                    indexer_server:checkpoint(Pid),
+                    ?LOG(?INFO, "indexed another ~w ~n", [length(Docs)]),
+                    case possibly_stop(Pid) of
+                        done -> ok;
+                        void ->
+                            worker(Pid)
+                    end;
+                done ->
+                    %% what we need to do here is go into polling mode
+                    %% and start polling for new updates to the db
+                    true
+            end
     end.
 
 possibly_stop(Pid) ->
     case indexer_server:should_i_stop(Pid) of
 	true ->
 	    ?LOG(?INFO, "Stopping~n", []),
-	    indexer_server:stop(Pid),
-	    exit(stopped);
+            %% want to stop looping but leave indexer_server going for search
+	    %%indexer_server:stop(Pid),
+	    done;
     	false ->
 	    void
     end.
