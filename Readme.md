@@ -33,7 +33,15 @@ The first time a db is idexed it creates a new database, .eg. biomedgt-idx to st
 
 And with luck you see these <a href="http://gist.github.com/247784">messages</a>.
 
-It takes a checkpoint after indexing every n docs, so you can stop() and then call indexer:start("biomedgt") again and it resumes. What gets indexed is all the values in the docs but not the keys or _xxx fields. After the db is indexed it start polling for changes every 60 seconds. If new documents are inserted or changed it indexes those and updates the indices appropriately.
+It takes a checkpoint after indexing every n docs, so you can call:
+
+    indexer:stop("biomedgt") 
+
+and then:
+
+    indexer:start("biomedgt") again and it resumes. Note that it actually first schedules the stop so that any existing operations can finish. What gets indexed is all the values in the docs but not the keys or _xxx fields. After the db is indexed it start polling for changes every 60 seconds. If new documents are inserted or changed it indexes those and updates the indices appropriately.
+
+## Still quite buggy
 
 Since everything needed to support indexing is in a couchdb db, one can just delete the "db_name-idx" database to start over
 
@@ -41,8 +49,19 @@ Since everything needed to support indexing is in a couchdb db, one can just del
 
 I think Lucene is pretty much state of the art these days for Java-based text indexing but I've been thinking it'd be nice to have something more native to CouchDB and have been curious as to how well Erlang can handle this.
 
-Currently we index all the slot values, skipping the reserved _xxx slots and the slot names. CouchDB is schema-less but presumably in most dbs docs would be fairly homogenous in having the same slot names across multiple docs. We also don't require the user to declare viewsthat are used to construct what gets indexed. We just index everything and think it might be useful to allow filters to be defined that run over the search results. Next steps will be to also record the slot names as well as doc ids in the inverted index so we can be more specific about where a term was found.  
+Currently we index all the slot values, skipping the reserved _xxx slots and the slot names. CouchDB is schema-less but presumably in most dbs docs would be fairly homogenous in having the same slot names across multiple docs. We also don't require the user to declare viewsthat are used to construct what gets indexed. This is the normal approach with Lucene style indexing. We just index everything and think it might be useful to allow filters to be defined that run over the search results. Next steps will be to also record the slot names as well as doc ids in the inverted index so we can be more specific about where a term was found.
 
+This is just a prototype, to explore the issues with FTI in erlang running in the couchdb VM. Clearly storing an inverted index in a couchdb db is sort of lame, but for a moderate size db like biomedgt, about 65K docs in 112M, it works surprisingly well. The initial index db is quite large due to repeated writes to the same docs but this is easily controlled with compaction. The original size is about 3.5 gig but it reduces to 90M or so. This prototype is also good for using hovercraft and exploring issues with writing code at the level of the storage engine. The indexing could really be done at even a lower level but this would involve changes to core components that need to be refactored first. 
+
+## Next TODOs
+
+add some APIs at the HTTP level
+
+add slot names to the index
+
+add result filtering
+
+revisit using osmos instead of couchdb for index persistence
 
 
 
