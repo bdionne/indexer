@@ -28,12 +28,7 @@
 -include("indexer.hrl").
 
 schedule_stop(Pid) ->
-    Check = gen_server:call(Pid, schedule_stop),
-    case Check of
-        ack -> ack;
-        %% index is not running go ahead and stop now
-        norun -> stop(Pid)
-    end.
+    gen_server:call(Pid, schedule_stop, infinity).
 
 should_i_stop(Pid) ->
     gen_server:call(Pid, should_i_stop).
@@ -88,7 +83,8 @@ init(DbName) ->
                       dbnam=list_to_binary(DbName),
                       idx=DbIndexName,
                       cont=Cont1,
-                      nextCP=Next}}.
+                      nextCP=Next,
+                      chkp=Cont1}}.
 
 handle_call(ets_table, _From, S) ->
     {reply, S#env.ets, S};
@@ -115,6 +111,7 @@ handle_call({checkpoint, changes, LastSeq}, _From, S) ->
     indexer_couchdb_crawler:write_last_seq(S#env.idx, LastSeq),
     {reply, ok, S};    
 handle_call(schedule_stop, _From, S) ->
+    ?LOG(?DEBUG, "value of checkpoint is ~p ~n",[S#env.chkp]),
     case S#env.chkp of
        {_, done} -> {reply, norun, S};
         _ -> {reply, ack, S#env{stop=true}}

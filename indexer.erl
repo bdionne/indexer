@@ -51,10 +51,7 @@ handle_call({search, DbName, Str}, _From, State) ->
 handle_call({stop, DbName}, _From, State) ->
     #state{dbs=Tab} = State,
     [{DbName,Pid}] = ets:lookup(Tab,DbName),
-    {reply, indexer_server:schedule_stop(Pid), State};
-handle_call({done, DbName}, _From, State) ->
-    #state{dbs=Tab} = State,
-    {reply, ets:delete(Tab,DbName), State}.
+    {reply, indexer_server:schedule_stop(Pid), State}.
 
 handle_cast(_Msg, State) ->
     {noreply, State}.
@@ -109,7 +106,11 @@ poll_for_changes(Pid) ->
             
             
             %% then updates
-            indexer_server:checkpoint(Pid,changes,LastSeq),
+            %% checkpoint only if there were changes
+            case length(Deletes) > 0 orelse length(Inserts) > 0 of
+                true -> indexer_server:checkpoint(Pid,changes,LastSeq);
+                false -> ok
+            end,
             sleep(60000),
             poll_for_changes(Pid)
     end.
