@@ -10,7 +10,7 @@ It runs in the same VM with couchdb, using <a href="http://github.com/jchris/hov
 
 ## Don't try this at home
 
-But if you do it's not too hard. You need a recent copy of hovercraft in your couchdb install directory. For best results install this project in a sibling directory to couchdb. For convenience I created a [couchdb branch)(http://github.com/bdionne/couchdb/tree/lucille "Lucille") that will start the indexer along with the couch server. It includes hovercraft in the top directory. So build as you normally would:
+But if you do it's not too hard. You need a recent copy of hovercraft in your couchdb install directory. For best results install this project in a sibling directory to couchdb. For convenience I created a [couchdb branch](http://github.com/bdionne/couchdb/tree/lucille "Lucille") that will start the indexer along with the couch server. It includes hovercraft in the top directory. So build as you normally would:
 
     .... make dev
 
@@ -33,7 +33,7 @@ I typically start couchdb with:
 
     ERL_FLAGS='-sname couch@localhost -pa ../indexer' ./utils/run -i
 
-assuming hovercraft is compiled and on the path. If indexer is not a sibling directory adjust the -pa accordingly. The indexer can now be run from the erlang shell:
+assuming hovercraft is compiled and on the path. If indexer is not a sibling directory adjust the -pa accordingly. The indexer can be run directly from the erlang shell:
 
     indexer:start_link().
 
@@ -41,7 +41,7 @@ The indexer supports multiple dbs. For any db you want indexed type:
 
     indexer:start("biomedgt").
 
-These last two commands can now be run from the HTTP API, using the [couchdb branch](http://github.com/bdionne/couchdb/tree/lucille "Lucille") mentioned above. The first is started by couch. To index a db:
+These last two commands can also be run from the HTTP API, using the [couchdb branch](http://github.com/bdionne/couchdb/tree/lucille "Lucille") mentioned above. The first is started by couch. To index a db:
 
     curl -X POST http://127.0.0.1:5984/biomedgt/_index
 
