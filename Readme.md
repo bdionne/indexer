@@ -39,7 +39,9 @@ It takes a checkpoint after indexing every n docs, so you can call:
 
 and then:
 
-    indexer:start("biomedgt") again and it resumes. Note that it actually first schedules the stop so that any existing operations can finish. What gets indexed is all the values in the docs but not the keys or _xxx fields. After the db is indexed it start polling for changes every 60 seconds. If new documents are inserted or changed it indexes those and updates the indices appropriately.
+    indexer:start("biomedgt") 
+
+again and it resumes. Note that it actually first schedules the stop so that any existing operations can finish. What gets indexed is all the values in the docs but not the keys or _xxx fields. After the db is indexed it start polling for changes every 60 seconds. If new documents are inserted or changed it indexes those and updates the indices appropriately.
 
 ## Still quite buggy
 
