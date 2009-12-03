@@ -113,7 +113,7 @@ handle_call({checkpoint, changes, LastSeq}, _From, S) ->
 handle_call(schedule_stop, _From, S) ->
     ?LOG(?DEBUG, "value of checkpoint is ~p ~n",[S#env.chkp]),
     case S#env.chkp of
-       {_, done} -> {reply, norun, S};
+       {_, done} -> {reply, norun, S#env{stop=true}};
         _ -> {reply, ack, S#env{stop=true}}
     end;
 handle_call({search, Str}, _From,S) ->

@@ -19,7 +19,8 @@
          get_changes_since/2,
          get_previous_version/2,
          get_deleted_docs/2,
-         lookup_doc/2, 
+         lookup_doc/2,
+         compact_index/1,
          lookup_indices/2, 
          write_indices/3,
          delete_indices/3]).
@@ -109,12 +110,7 @@ get_docs(DocIdList, DbName) ->
                       {ok, Doc} = lookup_doc(Id, DbName),
                       Doc
               end,
-              DocIdList).
-                      
-                           
-
-
-    
+              DocIdList).    
 
 get_all_docs(DbName, Options) ->
     IdBtree = open_by_id_btree(DbName),       
@@ -159,6 +155,11 @@ lookup_doc(Id, DbName) ->
         _:_ -> not_found
     end.
 
+compact_index(DbName) ->    
+    {ok, Db} = hovercraft:open_db(DbName),
+    couch_db:start_compact(Db).
+    
+
 store_chkp(DocId, B, DbName) ->
     case lookup_doc(DocId, DbName) of
         {ok, Doc} ->
@@ -174,6 +175,8 @@ store_chkp(DocId, B, DbName) ->
                        {<<"chkp">>, B}]},
             hovercraft:save_doc(DbName, NewDoc)
     end.
+    %% compact_index(DbName).
+    
 
 write_last_seq(DbName, LastSeq) ->
     NewDoc =
