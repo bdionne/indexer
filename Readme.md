@@ -10,31 +10,38 @@ It runs in the same VM with couchdb, using <a href="http://github.com/jchris/hov
 
 ## Don't try this at home
 
-But if you do it's not too hard. You need a recent copy of hovercraft in your couchdb install directory. For best results install this project in a sibling directory to couchdb. I typically start couchdb with:
+But if you do it's not too hard. You need a recent copy of hovercraft in your couchdb install directory. For best results install this project in a sibling directory to couchdb. In the indexer directory type:
+
+    make
+
+I typically start couchdb with:
 
     ERL_FLAGS='-sname couch@localhost -pa ../indexer' ./utils/run -i
 
-assuming hovercraft is compiled and on the path. If indexer is not a subling directory adjust the -pa accordingly
+assuming hovercraft is compiled and on the path. If indexer is not a sibling directory adjust the -pa accordingly
 
-    indexer:start().
-    indexer:index("biomedgt").
+    indexer:start_link().
 
-It creates a new database, .eg. biomedgt-idx to store the index. It also store checkpoint information in the index db for help in the event of restart
+The indexer now supports multiple dbs. For any db you want indexed type:
+
+    indexer:start("biomedgt").
+
+The first time a db is idexed it creates a new database, .eg. biomedgt-idx to store the index. It also stores checkpoint information in the index db for help in the event of restart. The db can be searched even while it's being indexed:
+
+    indexer:search("biomedgt","Rat Man").
     
 
-And with luck you see these <a href="http://gist.github.com/241278">messages</a>. While it's running you can search:
+And with luck you see these <a href="http://gist.github.com/247784">messages</a>.
 
-    indexer:search("Mental Dysfunction")
+It takes a checkpoint after indexing every n docs, so you can stop() and then call indexer:start("biomedgt") again and it resumes. What gets indexed is all the values in the docs but not the keys or _xxx fields. After the db is indexed it start polling for changes every 60 seconds. If new documents are inserted or changed it indexes those and updates the indices appropriately.
 
-And get results like <a href="http://gist.github.com/241279">these</a>.
-
-It takes a checkpoint after indexing every n docs, so you can stop() and then call indexer:index("biomedgt") again and it resumes. What gets indexed is all the values in the docs but not the keys or _xxx fields.
+Since everything needed to support indexing is in a couchdb db, one can just delete the "db_name-idx" database to start over
 
 ## Motivation and Ideas
 
 I think Lucene is pretty much state of the art these days for Java-based text indexing but I've been thinking it'd be nice to have something more native to CouchDB and have been curious as to how well Erlang can handle this.
 
-Currently we index all the slot values, skipping the reserved _xxx slots and the slot names. CouchDB is schema-less but presumably in most dbs docs would be fairly homogenous in having the same slot names across multiple docs.  
+Currently we index all the slot values, skipping the reserved _xxx slots and the slot names. CouchDB is schema-less but presumably in most dbs docs would be fairly homogenous in having the same slot names across multiple docs. We also don't require the user to declare viewsthat are used to construct what gets indexed. We just index everything and think it might be useful to allow filters to be defined that run over the search results. Next steps will be to also record the slot names as well as doc ids in the inverted index so we can be more specific about where a term was found.  
 
 
 
