@@ -10,7 +10,22 @@ It runs in the same VM with couchdb, using <a href="http://github.com/jchris/hov
 
 ## Don't try this at home
 
-But if you do it's not too hard. You need a recent copy of hovercraft in your couchdb install directory. For best results install this project in a sibling directory to couchdb. In the indexer directory type:
+But if you do it's not too hard. You need a recent copy of hovercraft in your couchdb install directory. For best results install this project in a sibling directory to couchdb. For convenience I created a [couchdb branch)(http://github.com/bdionne/couchdb/tree/lucille "Lucille") that will start the indexer along with the couch server. It includes hovercraft in the top directory. So build as you normally would:
+
+    .... make dev
+
+Note: this adds an entry default_dev.ini:
+
+    [httpd_db_handlers]
+    ...
+    _index = {couch_httpd_db, handle_index_req}
+
+
+and then compile hovercraft:
+
+    erlc hovercraft.erl
+
+In the indexer directory type:
 
     make
 
@@ -18,13 +33,19 @@ I typically start couchdb with:
 
     ERL_FLAGS='-sname couch@localhost -pa ../indexer' ./utils/run -i
 
-assuming hovercraft is compiled and on the path. If indexer is not a sibling directory adjust the -pa accordingly
+assuming hovercraft is compiled and on the path. If indexer is not a sibling directory adjust the -pa accordingly. The indexer can now be run from the erlang shell:
 
     indexer:start_link().
 
-The indexer now supports multiple dbs. For any db you want indexed type:
+The indexer supports multiple dbs. For any db you want indexed type:
 
     indexer:start("biomedgt").
+
+These last two commands can now be run from the HTTP API, using the [couchdb branch](http://github.com/bdionne/couchdb/tree/lucille "Lucille") mentioned above. The first is started by couch. To index a db:
+
+    curl -X POST http://127.0.0.1:5984/biomedgt/_index
+
+has the same effect as running the indexer:start("biomedgt") command
 
 The first time a db is idexed it creates a new database, .eg. biomedgt-idx to store the index. It also stores checkpoint information in the index db for help in the event of restart. The db can be searched even while it's being indexed:
 
