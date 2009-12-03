@@ -41,7 +41,7 @@ and then:
 
     indexer:start("biomedgt") 
 
-again and it resumes. Note that it actually first schedules the stop so that any existing operations can finish. What gets indexed is all the values in the docs but not the keys or _xxx fields. After the db is indexed it start polling for changes every 60 seconds. If new documents are inserted or changed it indexes those and updates the indices appropriately.
+again and it resumes. Note that it actually first schedules the stop so that any existing operations can finish. What gets indexed is all the values in the docs but not the keys or _xxx fields. After the db is indexed it start polling for changes every 60 seconds. If new documents are inserted or changed it indexes those and updates the indices appropriately. *Note: deletes are not yet supported, as I can't yet figure out how to retrieve a deleted document.*
 
 ## Still quite buggy
 
@@ -57,13 +57,13 @@ This is just a prototype, to explore the issues with FTI in erlang running in th
 
 ## Next TODOs
 
-add some APIs at the HTTP level
+* add some APIs at the HTTP level
 
-add slot names to the index
+* add slot names to the index
 
-add result filtering
+* add result filtering
 
-revisit using osmos instead of couchdb for index persistence
+* revisit using osmos instead of couchdb for index persistence
 
 
 
