@@ -19,6 +19,7 @@
 	 schedule_stop/1,
 	 search/2,
          write_index/3,
+         write_bulk_indices/2,
          delete_index/3,
 	 should_i_stop/1,
 	 stop/1]).
@@ -50,6 +51,9 @@ search(Pid, Str)  -> gen_server:call(Pid, {search, Str}).
 
 write_index(Pid, Key, Vals) ->
     gen_server:call(Pid, {write, Key, Vals}).
+
+write_bulk_indices(Pid, MrListS) ->
+    gen_server:call(Pid, {write_bulk, MrListS}, infinity).    
 
 delete_index(Pid, Key, Vals) ->
     gen_server:call(Pid, {delete, Key, Vals}).
@@ -92,7 +96,7 @@ handle_call(next_docs, _From, S) ->
     Cont = S#env.cont,
     case indexer_couchdb_crawler:next(Cont) of
 	{docs, Docs, ContToCkP} ->
-            ?LOG(?DEBUG, "checking the values in next docs ~p ~n",[ContToCkP]),
+            %%?LOG(?DEBUG, "checking the values in next docs ~p ~n",[ContToCkP]),
 	    {reply, {ok, Docs}, S#env{chkp=ContToCkP}};
 	done ->
             indexer_couchdb_crawler:compact_index(S#env.idx),
@@ -105,7 +109,7 @@ handle_call(checkpoint, _From, S) ->
     Next = S#env.nextCP,
     DbIndexName = S#env.idx,
     Next1 = indexer_checkpoint:checkpoint(Next, {DbIndexName, S#env.chkp}),
-    ?LOG(?DEBUG, "the next checkpoint is ~p ~n",[Next1]),
+    %%?LOG(?DEBUG, "the next checkpoint is ~p ~n",[Next1]),
     S1 = S#env{nextCP = Next1, cont=S#env.chkp},
     {reply, ok, S1};
 handle_call({checkpoint, changes, LastSeq}, _From, S) ->
@@ -123,6 +127,9 @@ handle_call({search, Str}, _From,S) ->
 
 handle_call({write, Key, Vals}, _From,S) ->
     Result = indexer_couchdb_crawler:write_indices(Key, Vals, S#env.idx),
+    {reply, Result, S};
+handle_call({write_bulk, MrListS}, _From,S) ->
+    Result = indexer_couchdb_crawler:write_bulk(MrListS, S#env.idx),
     {reply, Result, S};
 handle_call({delete, Key, Vals}, _From,S) ->
     Result = indexer_couchdb_crawler:delete_indices(Key, Vals, S#env.idx),

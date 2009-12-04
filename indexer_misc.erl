@@ -67,12 +67,14 @@ reduce(Parent, F1, F2, Acc0, L) ->
 		    spawn_link(fun() -> do_job(ReducePid, F1, X) end)
 	    end, L),
     N = length(L),
-    ?LOG(?DEBUG, "spawned ~w processes ~n",[N]), 
+    %%?LOG(?DEBUG, "spawned ~w processes ~n",[N]), 
     %% make a dictionary to store the Keys
     Dict0 = dict:new(),
     %% Wait for N Map processes to terminate
     Dict1 = collect_replies(N, Dict0),
+    
     Acc = dict:fold(F2, Acc0, Dict1),
+    
     Parent ! {self(), Acc}.
 
 %% collect_replies(N, Dict)

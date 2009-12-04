@@ -60,7 +60,7 @@ recover(DbIndexName, ChkpNameBin) ->
     proplists:get_value(<<"chkp">>,element(1,ChkpDoc)).
 
 checkpoint({DbIndexName, Next}, X) ->
-    ?LOG(?DEBUG, "creating checkpoint for:~p ~p ~p ~n", [DbIndexName, Next, X]),
+    %%?LOG(?DEBUG, "creating checkpoint for:~p ~p ~p ~n", [DbIndexName, Next, X]),
     DocId = list_to_binary("check" ++ integer_to_list(Next)),
     Time = now(),
     B = {Time, X},

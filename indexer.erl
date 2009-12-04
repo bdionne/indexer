@@ -69,15 +69,23 @@ worker(Pid) ->
     case possibly_stop(Pid) of
         done -> ok;
         void -> 
-            ?LOG(?DEBUG, "retrieving next batch ~n",[]),
+            ?LOG(?INFO, "retrieving next batch ~n",[]),
+            Tbeg = now(),
             case indexer_server:next_docs(Pid) of
-                {ok, Docs} ->            
-                    index_these_docs(Pid, Docs, true),
+                {ok, Docs} ->  
+                    Tind1 = now(),
+                    index_these_docs(Pid, Docs),
+                    Tdiff1 = timer:now_diff(now(),Tind1),
+                    ?LOG(?DEBUG, "time spent indexing was ~p ~n",[Tdiff1]),
                     indexer_server:checkpoint(Pid),
                     ?LOG(?INFO, "indexed another ~w ~n", [length(Docs)]),
                     case possibly_stop(Pid) of
                         done -> ok;
                         void ->
+                            Totdiff = timer:now_diff(now(),Tbeg),
+                            ?LOG(?DEBUG, "time spent total was ~p ~n",[Totdiff]),
+                            ?LOG(?DEBUG, "percentage spent in indexing was ~p ~n",
+                                 [Tdiff1 / Totdiff ]),
                             worker(Pid)
                     end;
                 done ->
@@ -85,6 +93,8 @@ worker(Pid) ->
                     %% and start polling for new updates to the db
                     poll_for_changes(Pid)
             end
+            
+
     end.
 
 poll_for_changes(Pid) ->
@@ -129,9 +139,26 @@ possibly_stop(Pid) ->
 
 index_these_docs(Pid, Docs, InsertOrDelete) ->
     Ets = indexer_server:ets_table(Pid),
-    F1 = fun(Pid1, Doc) -> indexer_words:do_indexing(Pid1, Doc, Ets) end,
+    F1 = fun(Pid1, Doc) -> indexer_words:do_indexing(Pid1, Doc, Ets) end,    
     F2 = fun(Key, Val, Acc) -> handle_result(Pid, Key, Val, Acc, InsertOrDelete) end,
     indexer_misc:mapreduce(F1, F2, 0, Docs).
+
+index_these_docs(Pid, Docs) ->
+    Ets = indexer_server:ets_table(Pid),
+    F1 = fun(Pid1, Doc) -> indexer_words:do_indexing(Pid1, Doc, Ets) end,
+    
+    F2 = fun(Key, Val, Acc) ->
+                 [{Key, Val} | Acc] end,
+    MrList = indexer_misc:mapreduce(F1, F2, [], Docs),
+    MrListS = lists:sort(fun(A, B) ->
+                                 element(1,A) < element(1, B) end,
+                         MrList),
+    Tbeg = now(),
+    indexer_server:write_bulk_indices(Pid, MrListS),
+    
+    Tdiff = timer:now_diff(now(),Tbeg),
+    ?LOG(?DEBUG, "time spent in writing was ~p ~n",[Tdiff]).
+    
 
 handle_result(Pid, Key, Vals, Acc, InsertOrDelete) ->
     case InsertOrDelete of

@@ -23,6 +23,7 @@
          compact_index/1,
          lookup_indices/2, 
          write_indices/3,
+         write_bulk/2,
          delete_indices/3]).
 
 -include("../couchdb/src/couchdb/couch_db.hrl").
@@ -38,7 +39,7 @@ start(DbName, [{reset, DbIndexName}]) ->
     {DbName, 0}.
 
 next({DbName, StartId}) ->
-    ?LOG(?DEBUG,"getting next for ~p ~p ~n",[DbName, StartId]),
+    %%?LOG(?DEBUG,"getting next for ~p ~p ~n",[DbName, StartId]),
     Docs = case StartId of
                0 -> get_all_docs(DbName, []);
                done -> [];
@@ -67,7 +68,7 @@ open_by_id_btree(DbName) ->
 
 get_changes_since(DbName, SeqNum) ->   
     {ok, #db{update_seq=LastSeq}=Db} = hovercraft:open_db(DbName),
-    ?LOG(?DEBUG,"last update sequences id is: ~p ~n",[LastSeq]),
+    %% ?LOG(?DEBUG,"last update sequences id is: ~p ~n",[LastSeq]),
     {ok, DocInfos} = couch_db:changes_since(Db, all_docs, SeqNum, fun(DocInfos, Acc) ->
                                                          {ok, lists:append(Acc, DocInfos)} end,
                            [],[]),
@@ -98,13 +99,6 @@ get_previous_version(Ids, DbName) ->
 get_deleted_docs(_DocIds, _DbName) ->
     [].
 
-%%     {ok, Db} = hovercraft:open_db(DbName),
-%%     lists:map(fun(Id) ->
-%%                       CouchDoc = couch_httpd_db:couch_doc_open(Db, Id, nil, [deleted]),
-%%                       couch_doc:to_json_obj(CouchDoc, [])
-%%               end, DocIds).
-    
-
 get_docs(DocIdList, DbName) ->
     lists:map(fun(Id) -> 
                       {ok, Doc} = lookup_doc(Id, DbName),
@@ -120,9 +114,13 @@ get_all_docs(DbName, Options) ->
                                   %%?LOG(?DEBUG, "the key: ~p the acc: ~p ~n",[element(1,Key), Acc]),
                                   case element(1, Acc) of
                                       0 -> {stop, Acc};
-                                      _ -> 
-                                          {ok, {element(1, Acc) - 1,
-                                                [element(1, Key) | element(2, Acc)]}}
+                                      _ -> TryDoc = lookup_doc(element(1,Key), DbName),
+                                           case TryDoc of
+                                               {ok, Doc} ->
+                                                   {ok, {element(1, Acc) - 1,
+                                                         [Doc | element(2, Acc)]}};
+                                               _ -> {ok, {element(1, Acc), element(2, Acc)}}
+                                           end
                                   end
                           end, {?BATCH_SIZE + 1,[]}, Options),
     Docs = element(2,Result),
@@ -131,20 +129,10 @@ get_all_docs(DbName, Options) ->
 
     case length(Docs) of
         0 -> [];
-        _ -> ReturnDocs = 
-                 %% there must be a better way to combine this with the foldl in the previous step.
-                 lists:map(fun(Id) ->
-                                   try
-                                       {ok, Doc} = hovercraft:open_doc(DbName, Id),
-                                       Doc
-                                   catch
-                                       _:_ -> []
-                                   end                          
-                           end, Docs), 
-             case Bool of
-                 true -> ?LOG(?DEBUG,"ok at the end ~w ~n",[length(ReturnDocs)]),
-                         {done, ReturnDocs};
-                 _ -> {hd(Docs), lists:reverse(tl(ReturnDocs))}                         
+        _ -> case Bool of
+                 true -> %%?LOG(?DEBUG,"ok at the end ~w ~n",[length(ReturnDocs)]),
+                         {done, Docs};
+                 _ -> {proplists:get_value(<<"_id">>, element(1,hd(Docs))), lists:reverse(tl(Docs))}                         
              end 
     end.
 
@@ -204,6 +192,15 @@ lookup_indices(Word, DbName) ->
         not_found -> []
     end.
 
+write_bulk(MrListS, DbName) ->
+    Docs = lists:map(fun({Key, Vals}) ->
+                             prep_doc(Key, Vals, DbName)
+                     end,
+                     MrListS),
+    hovercraft:save_bulk(DbName, Docs).
+    
+    
+    
 write_indices(Word, Vals, DbName) ->
     %% see if entry already exists
     case lookup_doc(list_to_binary(Word), DbName) of
@@ -223,6 +220,22 @@ write_indices(Word, Vals, DbName) ->
                        {<<"indices">>,Vals}]},
             hovercraft:save_doc(DbName, NewDoc)
     end.
+
+prep_doc(Word, Vals, DbName) ->
+   case lookup_doc(list_to_binary(Word), DbName) of
+        {ok, Doc} -> 
+            Props = element(1, Doc),
+            Indices = proplists:get_value(<<"indices">>, Props),
+            %%?LOG(?DEBUG,"the current indices ~p ~n",[Indices]),
+            NewProps = proplists:delete(<<"indices">>, Props),
+            %%?LOG(?DEBUG,"props after deleting ~p ~n",[NewProps]),
+            {lists:append(NewProps, 
+                              [{<<"indices">>,lists:append(Indices, Vals)}] )};
+        not_found -> 
+            {[{<<"_id">>, list_to_binary(Word)},
+                       {<<"indices">>,Vals}]}
+    end.
+    
 
 delete_indices(Word, Vals, DbName) ->
     %% see if entry already exists
