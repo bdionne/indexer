@@ -39,7 +39,6 @@ start(DbName, [{reset, DbIndexName}]) ->
     {DbName, 0}.
 
 next({DbName, StartId}) ->
-    %%?LOG(?DEBUG,"getting next for ~p ~p ~n",[DbName, StartId]),
     Docs = case StartId of
                0 -> get_all_docs(DbName, []);
                done -> [];
@@ -68,22 +67,25 @@ open_by_id_btree(DbName) ->
 
 get_changes_since(DbName, SeqNum) ->   
     {ok, #db{update_seq=LastSeq}=Db} = hovercraft:open_db(DbName),
-    %% ?LOG(?DEBUG,"last update sequences id is: ~p ~n",[LastSeq]),
-    {ok, DocInfos} = couch_db:changes_since(Db, all_docs, SeqNum, fun(DocInfos, Acc) ->
-                                                         {ok, lists:append(Acc, DocInfos)} end,
-                           [],[]),
+    {ok, DocInfos} = 
+        couch_db:changes_since(Db, all_docs, SeqNum,
+                               fun(DocInfos, Acc) ->
+                                       {ok, lists:append(Acc, DocInfos)} end,
+                               [],[]),
     {InsIds, UpdIds, DelIds} = lists:foldl(fun(DocInfo, {Inserts, Updates, Deletes}) ->
-                        {doc_info, Id, _, [{rev_info,{Rev,_},_,Deleted,_}]}=DocInfo,
-                        case Rev of
-                            1 -> {[Id | Inserts],Updates, Deletes};
-                            _ -> case Deleted of
-                                     true -> {Inserts, Updates, [Id | Deletes]};
-                                     _ -> {Inserts, [Id | Updates], Deletes}
-                                 end
-                        end
-                end,{[],[],[]},DocInfos),
+                                                   {doc_info, Id, _, [{rev_info,{Rev,_},_,Deleted,_}]}=DocInfo,
+                                                   case Rev of
+                                                       1 -> {[Id | Inserts],Updates, Deletes};
+                                                       _ -> case Deleted of
+                                                                true -> {Inserts, Updates, [Id | Deletes]};
+                                                                _ -> {Inserts, [Id | Updates], Deletes}
+                                                            end
+                                                   end
+                                           end,{[],[],[]},DocInfos),
     PrevVersDocs = get_previous_version(UpdIds, DbName),
-    {lists:append(get_deleted_docs(DelIds, DbName), PrevVersDocs), get_docs(lists:append(InsIds, UpdIds), DbName), LastSeq}.
+    {lists:append(
+       get_deleted_docs(DelIds, DbName), PrevVersDocs), 
+     get_docs(lists:append(InsIds, UpdIds), DbName), LastSeq}.
 
 get_previous_version(Ids, DbName) ->
     lists:map(fun(Id) ->
@@ -111,8 +113,7 @@ get_all_docs(DbName, Options) ->
     {ok, _, Result} = 
         couch_btree:foldl(IdBtree,
                           fun(Key, Acc) ->
-                                  %%?LOG(?DEBUG, "the key: ~p the acc: ~p ~n",[element(1,Key), Acc]),
-                                  case element(1, Acc) of
+                                 case element(1, Acc) of
                                       0 -> {stop, Acc};
                                       _ -> TryDoc = lookup_doc(element(1,Key), DbName),
                                            case TryDoc of
@@ -130,8 +131,7 @@ get_all_docs(DbName, Options) ->
     case length(Docs) of
         0 -> [];
         _ -> case Bool of
-                 true -> %%?LOG(?DEBUG,"ok at the end ~w ~n",[length(ReturnDocs)]),
-                         {done, Docs};
+                 true -> {done, Docs};
                  _ -> {proplists:get_value(<<"_id">>, element(1,hd(Docs))), lists:reverse(tl(Docs))}                         
              end 
     end.
@@ -163,7 +163,6 @@ store_chkp(DocId, B, DbName) ->
                        {<<"chkp">>, B}]},
             hovercraft:save_doc(DbName, NewDoc)
     end.
-    %% compact_index(DbName).
     
 
 write_last_seq(DbName, LastSeq) ->
@@ -202,18 +201,14 @@ write_bulk(MrListS, DbName) ->
     
     
 write_indices(Word, Vals, DbName) ->
-    %% see if entry already exists
     case lookup_doc(list_to_binary(Word), DbName) of
         {ok, Doc} -> 
             Props = element(1, Doc),
             Indices = proplists:get_value(<<"indices">>, Props),
-            %%?LOG(?DEBUG,"the current indices ~p ~n",[Indices]),
             NewProps = proplists:delete(<<"indices">>, Props),
-            %%?LOG(?DEBUG,"props after deleting ~p ~n",[NewProps]),
             NewDoc = 
                 {lists:append(NewProps, 
                               [{<<"indices">>,lists:append(Indices, Vals)}] )},
-            %%?LOG(?DEBUG,"new props ~p ~n",[NewDoc]),
             hovercraft:save_doc(DbName, NewDoc);
         not_found -> 
             NewDoc = {[{<<"_id">>, list_to_binary(Word)},
@@ -238,7 +233,6 @@ prep_doc(Word, Vals, DbName) ->
     
 
 delete_indices(Word, Vals, DbName) ->
-    %% see if entry already exists
     case lookup_doc(list_to_binary(Word), DbName) of
         {ok, Doc} -> 
             Props = element(1, Doc),
@@ -247,11 +241,9 @@ delete_indices(Word, Vals, DbName) ->
                                              lists:delete(Elem, Acc)
                                      end,Indices,Vals),
             NewProps = proplists:delete(<<"indices">>, Props),
-            %%?LOG(?DEBUG,"props after deleting ~p ~n",[NewProps]),
             NewDoc = 
                 {lists:append(NewProps, 
                               [{<<"indices">>,NewIndices}])},
-            %%?LOG(?DEBUG,"new props ~p ~n",[NewDoc]),
             hovercraft:save_doc(DbName, NewDoc);
         not_found -> ok
     end.

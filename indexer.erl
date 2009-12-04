@@ -10,6 +10,14 @@
 %%  Original copyright: "(c) 2007 armstrongonsoftware"
 %%---
 -module(indexer).
+-author('Joe Armstrong').
+%%
+%% this is changed considerably form the book. It's been made into a gen_server
+%% that maintains a hash of indexer_servers, one for each couchdb being indexed
+%% or queried. The indexers work in batch as well as incrmental mode, requiring
+%% two types of map/reduce functions
+-author('Bob Dionne').
+
 -export([start_link/0, stop/1, start/1, search/2]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
@@ -89,7 +97,7 @@ worker(Pid) ->
                             worker(Pid)
                     end;
                 done ->
-                    %% what we need to do here is go into polling mode
+                    %% we now go into polling mode
                     %% and start polling for new updates to the db
                     poll_for_changes(Pid)
             end
@@ -101,8 +109,7 @@ poll_for_changes(Pid) ->
     case possibly_stop(Pid) of
         done ->
              ok;
-        void -> 
-            ?LOG(?DEBUG, "polling for changes again ~n",[]),
+        void ->
             {Deletes, Inserts, LastSeq} = indexer_server:get_changes(Pid),
             %% first do the deletes BECAUSE they contain previous revisions
             %% of docs for the updated case. When a doc has been added we simplying
@@ -112,9 +119,7 @@ poll_for_changes(Pid) ->
             ?LOG(?INFO, "indexed another ~w ~n", [length(Deletes)]),
             % then do the inserts
             index_these_docs(Pid,Inserts,true),
-            ?LOG(?INFO, "indexed another ~w ~n", [length(Inserts)]),
-            
-            
+            ?LOG(?INFO, "indexed another ~w ~n", [length(Inserts)]),            
             %% then updates
             %% checkpoint only if there were changes
             case length(Deletes) > 0 orelse length(Inserts) > 0 of
@@ -130,8 +135,6 @@ possibly_stop(Pid) ->
     case indexer_server:should_i_stop(Pid) of
 	true ->
 	    ?LOG(?INFO, "Stopping~n", []),
-            %% want to stop looping but leave indexer_server going for search
-	    %%indexer_server:stop(Pid),
 	    done;
     	false ->
 	    void

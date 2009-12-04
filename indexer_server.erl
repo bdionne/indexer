@@ -10,6 +10,13 @@
 %% 
 %%---
 -module(indexer_server).
+-author('Joe Armstrong').
+
+%% This code was modified considerably to integrate with couchdb
+%% but still retains the original ideas form the text book
+-author('').
+
+
 
 -export([next_docs/1,
          get_changes/1,

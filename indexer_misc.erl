@@ -9,6 +9,13 @@
 %%  Original copyright: "(c) 2007 armstrongonsoftware"
 %%---
 -module(indexer_misc).
+-author('Joe Armstrong').
+%%
+%% minor tweaks to integrate with couchdb
+-author('Bob Dionne').
+
+
+
 -export([foreach_word_in_string/3, 
 	 mapreduce/4, search/4]).
 -import(lists, [filter/2, foreach/2, map/2, reverse/1]).
@@ -45,11 +52,6 @@ collect_word([H|T]=All, L) ->
 collect_word([], L) ->
     {reverse(L), []}.
 
-%%----- mapreduce
-
-%% F1(Pid, X) -> sends {Key,Val} messages to Pid
-%% F2(Key, [Val], AccIn) -> AccOut
-
 mapreduce(F1, F2, Acc0, L) ->
     S = self(),
     Pid = spawn(fun() -> reduce(S, F1, F2, Acc0, L) end),    
@@ -67,7 +69,6 @@ reduce(Parent, F1, F2, Acc0, L) ->
 		    spawn_link(fun() -> do_job(ReducePid, F1, X) end)
 	    end, L),
     N = length(L),
-    %%?LOG(?DEBUG, "spawned ~w processes ~n",[N]), 
     %% make a dictionary to store the Keys
     Dict0 = dict:new(),
     %% Wait for N Map processes to terminate
@@ -119,11 +120,13 @@ search(Str, Ets, DbName, Idx) ->
 	    Unique = sets:intersection(Sets),
 	    Indices1 = sets:to_list(Unique),
 	    case length(Indices1) of
-		N when N > 10000 ->
+		N when N > 500 ->
 		    tooMany;
-		_ ->
-                    %%indexer_couchdb_crawler:get_docs(DbName, Indices1)
-		    map(fun(I) -> hovercraft:open_doc(DbName, I) end, Indices1)
+		_ -> 
+                    map(fun(I) -> 
+                                {ok, Doc} = hovercraft:open_doc(DbName, I),
+                                Doc
+                        end, Indices1)
 	    end
     end.
 
