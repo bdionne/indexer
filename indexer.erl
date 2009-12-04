@@ -32,7 +32,7 @@ start(DbName) ->
     gen_server:call(?MODULE,{start, DbName}).    
 
 search(DbName, Str) ->
-    gen_server:call(?MODULE, {search, DbName, Str}).
+    gen_server:call(?MODULE, {search, DbName, Str}, infinity).
 
 stop(DbName) ->
     ?LOG(?INFO, "Scheduling a stop~n", []),

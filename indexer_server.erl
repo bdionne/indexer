@@ -47,7 +47,7 @@ checkpoint(Pid, changes, LastSeq) ->
 
 ets_table(Pid)  -> gen_server:call(Pid, ets_table).
     
-search(Pid, Str)  -> gen_server:call(Pid, {search, Str}).
+search(Pid, Str)  -> gen_server:call(Pid, {search, Str}, infinity).
 
 write_index(Pid, Key, Vals) ->
     gen_server:call(Pid, {write, Key, Vals}).

@@ -119,7 +119,7 @@ search(Str, Ets, DbName, Idx) ->
 	    Unique = sets:intersection(Sets),
 	    Indices1 = sets:to_list(Unique),
 	    case length(Indices1) of
-		N when N > 100 ->
+		N when N > 10000 ->
 		    tooMany;
 		_ ->
                     %%indexer_couchdb_crawler:get_docs(DbName, Indices1)
