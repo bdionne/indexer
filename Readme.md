@@ -80,6 +80,17 @@ This is just a prototype, to explore the issues with FTI in erlang running in th
 
 * add some APIs at the HTTP level
 
+As noted above the indexer can be started for a database using:
+
+    curl -X POST http://127.0.0.1:5984/biomedgt/_index
+
+Once it's started, simple queries can be run against it:
+
+    curl http://127.0.0.1:5984/biomedgt/_index_query?word=neoplasm%20rat%20benign
+
+To find all documents that contain the words neoplasm, rat, and benign. Of course the results aren't completely available until the indexing is complete. Support has been added to check the task status in Futon.
+
+
 * add slot names to the index
 
 * add result filtering
