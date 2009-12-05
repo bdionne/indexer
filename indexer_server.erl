@@ -14,11 +14,13 @@
 
 %% This code was modified considerably to integrate with couchdb
 %% but still retains the original ideas form the text book
--author('').
+-author('Bob Dionne').
 
 
 
 -export([next_docs/1,
+         total_docs/1,
+         db_name/1,
          get_changes/1,
 	 ets_table/1, 
 	 checkpoint/1,
@@ -45,6 +47,13 @@ stop(Pid) ->
      gen_server:cast(Pid, stop).
 
 next_docs(Pid)   -> gen_server:call(Pid, next_docs, infinity).
+
+total_docs(Pid) ->
+    gen_server:call(Pid, total_docs).
+
+db_name(Pid) ->
+    gen_server:call(Pid, db_name).
+
 get_changes(Pid) ->
      gen_server:call(Pid, changes, infinity).
 
@@ -81,7 +90,9 @@ init(DbName) ->
     case indexer_couchdb_crawler:db_exists(DbIndexName) of
         true -> ok;
         false ->
-            Cont = indexer_couchdb_crawler:start(list_to_binary(DbName),[{reset, DbIndexName}]),
+            Cont = 
+                indexer_couchdb_crawler:start(
+                  list_to_binary(DbName),[{reset, DbIndexName}]),
 	    Check = {DbIndexName, Cont},
 	    ?LOG(?INFO, "creating checkpoint:~p~n", [Check]),
 	    indexer_checkpoint:init(DbIndexName, Check)
@@ -103,7 +114,6 @@ handle_call(next_docs, _From, S) ->
     Cont = S#env.cont,
     case indexer_couchdb_crawler:next(Cont) of
 	{docs, Docs, ContToCkP} ->
-            %%?LOG(?DEBUG, "checking the values in next docs ~p ~n",[ContToCkP]),
 	    {reply, {ok, Docs}, S#env{chkp=ContToCkP}};
 	done ->
             indexer_couchdb_crawler:compact_index(S#env.idx),
@@ -111,12 +121,15 @@ handle_call(next_docs, _From, S) ->
     end;
 handle_call(changes, _From, S) ->
     LastSeq = indexer_couchdb_crawler:read_last_seq(S#env.idx),
-    {reply, indexer_couchdb_crawler:get_changes_since(S#env.dbnam, LastSeq), S};    
+    {reply, indexer_couchdb_crawler:get_changes_since(S#env.dbnam, LastSeq), S};
+handle_call(total_docs, _From, S) ->
+    {reply, indexer_couchdb_crawler:read_doc_count(S#env.idx), S};
+handle_call(db_name, _From, S) ->
+    {reply, S#env.dbnam, S};
 handle_call(checkpoint, _From, S) ->
     Next = S#env.nextCP,
     DbIndexName = S#env.idx,
     Next1 = indexer_checkpoint:checkpoint(Next, {DbIndexName, S#env.chkp}),
-    %%?LOG(?DEBUG, "the next checkpoint is ~p ~n",[Next1]),
     S1 = S#env{nextCP = Next1, cont=S#env.chkp},
     {reply, ok, S1};
 handle_call({checkpoint, changes, LastSeq}, _From, S) ->

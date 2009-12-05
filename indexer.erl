@@ -50,7 +50,13 @@ handle_call({start, DbName}, _From, State) ->
     {ok, Pid} = gen_server:start_link(indexer_server, [DbName], []),
     #state{dbs=Tab} = State,
     ets:insert(Tab,{DbName,Pid}),
-    spawn_link(fun() -> worker(Pid) end),
+    spawn_link(
+      fun() -> 
+              couch_task_status:add_task(<<"Indexing Database">>, DbName, <<"Starting">>),
+              %%couch_task_status:set_update_frequency(500),
+              worker(Pid, 0),
+              couch_task_status:update("Complete")
+      end),
     {reply, ok, State};
 handle_call({search, DbName, Str}, _From, State) ->
     #state{dbs=Tab} = State,
@@ -73,9 +79,9 @@ terminate(_Reason, _State) ->
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
-worker(Pid) ->
+worker(Pid, WorkSoFar) ->
     case possibly_stop(Pid) of
-        done -> ok;
+
         void -> 
             ?LOG(?INFO, "retrieving next batch ~n",[]),
             Tbeg = now(),
@@ -87,6 +93,10 @@ worker(Pid) ->
                     ?LOG(?DEBUG, "time spent indexing was ~p ~n",[Tdiff1]),
                     indexer_server:checkpoint(Pid),
                     ?LOG(?INFO, "indexed another ~w ~n", [length(Docs)]),
+                    TotalDocs = indexer_server:total_docs(Pid),
+                    WorkSoFarNew = WorkSoFar + length(Docs),
+                    couch_task_status:update("Indexed ~p of ~p changes (~p%)",
+                [WorkSoFarNew, TotalDocs, (WorkSoFarNew*100) div TotalDocs]),
                     case possibly_stop(Pid) of
                         done -> ok;
                         void ->
@@ -94,12 +104,15 @@ worker(Pid) ->
                             ?LOG(?DEBUG, "time spent total was ~p ~n",[Totdiff]),
                             ?LOG(?DEBUG, "percentage spent in indexing was ~p ~n",
                                  [Tdiff1 / Totdiff ]),
-                            worker(Pid)
+                            worker(Pid, WorkSoFarNew)
                     end;
                 done ->
                     %% we now go into polling mode
                     %% and start polling for new updates to the db
+                    couch_task_status:update
+                      ("batch indexing complete, monitoring for changes"),
                     poll_for_changes(Pid)
+                    
             end
             
 
@@ -116,14 +129,17 @@ poll_for_changes(Pid) ->
             %% updating the index by just doing a delete followed by an insertion
             %% for the new versin of the doc
             index_these_docs(Pid,Deletes,false),
-            ?LOG(?INFO, "indexed another ~w ~n", [length(Deletes)]),
+            ?LOG(?INFO, "indexed another ~w ~n", [length(Deletes)]),           
             % then do the inserts
             index_these_docs(Pid,Inserts,true),
             ?LOG(?INFO, "indexed another ~w ~n", [length(Inserts)]),            
             %% then updates
             %% checkpoint only if there were changes
             case length(Deletes) > 0 orelse length(Inserts) > 0 of
-                true -> indexer_server:checkpoint(Pid,changes,LastSeq);
+                true -> indexer_server:checkpoint(Pid,changes,LastSeq),
+                        couch_task_status:update(
+                          "Indexed another ~p documents",
+                          [length(Deletes) + length(Inserts)]);
                 false -> ok
             end,
             sleep(60000),

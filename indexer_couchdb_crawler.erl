@@ -15,6 +15,7 @@
          db_exists/1, 
          store_chkp/3,
          read_last_seq/1,
+         read_doc_count/1,
          write_last_seq/2,
          get_changes_since/2,
          get_previous_version/2,
@@ -35,7 +36,9 @@ start(DbName, [{reset, DbIndexName}]) ->
     hovercraft:delete_db(DbIndexName),
     hovercraft:create_db(DbIndexName), 
     {ok, #db{update_seq=LastSeq}} = hovercraft:open_db(DbName),
-    write_last_seq(DbIndexName, LastSeq),
+    {ok, DbInfo} = hovercraft:db_info(DbName),
+    DocCount = proplists:get_value(doc_count,DbInfo),
+    store_stats(DbIndexName, LastSeq, DocCount),
     {DbName, 0}.
 
 next({DbName, StartId}) ->
@@ -93,25 +96,33 @@ get_changes_since(DbName, SeqNum) ->
      get_docs(lists:append(InsIds, UpdIds), DbName), LastSeq}.
 
 get_previous_version(Ids, DbName) ->
-    lists:map(fun(Id) ->
-                      {ok, Db} = hovercraft:open_db(DbName),
-                      DocWithRevs = couch_doc:to_json_obj(couch_httpd_db:couch_doc_open(Db, Id, nil, [revs]),[revs]),
-                      Revs = proplists:get_value(<<"_revisions">>,element(1,DocWithRevs)),
-                      PrevRevId = "1-" ++ binary_to_list(lists:nth(2, proplists:get_value(<<"ids">>,element(1,Revs)))),
-                      couch_doc:to_json_obj(couch_httpd_db:couch_doc_open(Db,Id,couch_doc:parse_rev(PrevRevId),[]),[])
-              end,Ids).
-    
-    
+    lists:map(
+      fun(Id) ->
+              {ok, Db} = hovercraft:open_db(DbName),
+              DocWithRevs =
+                  couch_doc:to_json_obj(couch_httpd_db:couch_doc_open(
+                                          Db, Id, nil, [revs]),[revs]),
+              Revs = proplists:get_value(<<"_revisions">>,element(1,DocWithRevs)),
+              PrevRevId = 
+                  "1-" ++ 
+                  binary_to_list(lists:nth(2,
+                                           proplists:get_value(<<"ids">>,
+                                                               element(1,Revs)))),
+              couch_doc:to_json_obj(
+                couch_httpd_db:couch_doc_open(Db,Id,couch_doc:parse_rev(PrevRevId),
+                                              []),[])
+      end,Ids).    
 
 get_deleted_docs(_DocIds, _DbName) ->
     [].
 
 get_docs(DocIdList, DbName) ->
-    lists:map(fun(Id) -> 
-                      {ok, Doc} = lookup_doc(Id, DbName),
-                      Doc
-              end,
-              DocIdList).    
+    lists:map(
+      fun(Id) -> 
+              {ok, Doc} = lookup_doc(Id, DbName),
+              Doc
+      end,
+      DocIdList).    
 
 get_all_docs(DbName, Options) ->
     IdBtree = open_by_id_btree(DbName),       
@@ -137,7 +148,8 @@ get_all_docs(DbName, Options) ->
         0 -> [];
         _ -> case Bool of
                  true -> {done, Docs};
-                 _ -> {proplists:get_value(<<"_id">>, element(1,hd(Docs))), lists:reverse(tl(Docs))}                         
+                 _ -> {proplists:get_value(<<"_id">>,
+                                           element(1,hd(Docs))), lists:reverse(tl(Docs))}
              end 
     end.
 
@@ -172,21 +184,35 @@ store_chkp(DocId, B, DbName) ->
 
 write_last_seq(DbName, LastSeq) ->
     NewDoc =
-        case lookup_doc(<<"last_seq">>, DbName) of
+        case lookup_doc(<<"db_stats">>, DbName) of
             {ok, Doc} ->
                 Props = element(1, Doc),
-                NewProps = proplists:delete(<<"value">>, Props),
+                NewProps = proplists:delete(<<"last_seq">>, Props),
                 {lists:append(NewProps, 
-                              [{<<"value">>,LastSeq}] )};
+                              [{<<"last_seq">>,LastSeq}] )};
             not_found ->
-                {[{<<"_id">>, <<"last_seq">>},
-                  {<<"value">>, LastSeq}]}
+                {[{<<"_id">>, <<"db_stats">>},
+                  {<<"last_seq">>, LastSeq}]}
         end,
     hovercraft:save_doc(DbName, NewDoc).
 
+store_stats(DbName, LastSeq, DocCount) ->
+    NewDoc = 
+        {[{<<"_id">>, <<"db_stats">>},
+          {<<"last_seq">>, LastSeq},
+          {<<"doc_count">>, DocCount}]},
+    hovercraft:save_doc(DbName, NewDoc).
+
+
+    
+
 read_last_seq(DbName) ->
-    {ok, Doc} = lookup_doc(<<"last_seq">>, DbName),
-    proplists:get_value(<<"value">>,element(1,Doc)).
+    {ok, Doc} = lookup_doc(<<"db_stats">>, DbName),
+    proplists:get_value(<<"last_seq">>,element(1,Doc)).
+
+read_doc_count(DbName) ->
+    {ok, Doc} = lookup_doc(<<"db_stats">>, DbName),
+    proplists:get_value(<<"doc_count">>,element(1,Doc)).
     
     
 
@@ -201,8 +227,7 @@ write_bulk(MrListS, DbName) ->
                              prep_doc(Key, Vals, DbName)
                      end,
                      MrListS),
-    hovercraft:save_bulk(DbName, Docs).
-    
+    hovercraft:save_bulk(DbName, Docs).    
     
     
 write_indices(Word, Vals, DbName) ->
