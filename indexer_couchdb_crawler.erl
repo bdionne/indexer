@@ -72,17 +72,22 @@ get_changes_since(DbName, SeqNum) ->
                                fun(DocInfos, Acc) ->
                                        {ok, lists:append(Acc, DocInfos)} end,
                                [],[]),
-    {InsIds, UpdIds, DelIds} = lists:foldl(fun(DocInfo, {Inserts, Updates, Deletes}) ->
-                                                   {doc_info, Id, _, [{rev_info,{Rev,_},_,Deleted,_}]}=DocInfo,
-                                                   case Rev of
-                                                       1 -> {[Id | Inserts],Updates, Deletes};
-                                                       _ -> case Deleted of
-                                                                true -> {Inserts, Updates, [Id | Deletes]};
-                                                                _ -> {Inserts, [Id | Updates], Deletes}
-                                                            end
-                                                   end
-                                           end,{[],[],[]},DocInfos),
-    PrevVersDocs = get_previous_version(UpdIds, DbName),
+    {InsIds, UpdIds, DelIds} = 
+        lists:foldl(fun(DocInfo, 
+                        {Inserts,
+                         Updates,
+                         Deletes}) ->
+                            {doc_info, Id, _, [{rev_info,{Rev,_},_,Deleted,_}]}=DocInfo,
+                            case Rev of
+                                1 -> {[Id | Inserts],Updates, Deletes};
+                                _ -> case Deleted of
+                                         true -> {Inserts, Updates, [Id | Deletes]};
+                                         _ -> {Inserts, [Id | Updates], Deletes}
+                                     end
+                            end
+                    end,{[],[],[]},DocInfos),
+    PrevVersDocs = 
+        get_previous_version(UpdIds, DbName),
     {lists:append(
        get_deleted_docs(DelIds, DbName), PrevVersDocs), 
      get_docs(lists:append(InsIds, UpdIds), DbName), LastSeq}.
