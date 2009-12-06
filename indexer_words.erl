@@ -51,9 +51,9 @@ process_word(Word, Index, SlotName, Tab, EtsTrigrams, Pid) ->
 	{yes, Word1} ->
 	    Bin  = list_to_binary(Word1),
 
-	    case ets:lookup(Tab, {Bin, SlotName}) of
+	    case ets:lookup(Tab, Bin) of
 		[] ->
-		    ets:insert(Tab, {Bin, SlotName}),
+		    ets:insert(Tab, {Bin}),
 		    Pid ! {Word1, Index, SlotName};
 		_  ->
 		    void
