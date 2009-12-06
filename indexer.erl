@@ -40,7 +40,13 @@ start(DbName) ->
     gen_server:call(?MODULE,{start, DbName}).    
 
 search(DbName, Str) ->
-    gen_server:call(?MODULE, {search, DbName, Str}, infinity).
+    Docs = gen_server:call(?MODULE, {search, DbName, Str}, infinity),
+    case Docs of
+        none ->
+             [];
+        tooMany -> [];
+        _ -> Docs
+    end.
 
 stop(DbName) ->
     ?LOG(?INFO, "Scheduling a stop~n", []),
@@ -127,7 +133,7 @@ poll_for_changes(Pid) ->
             %% first do the deletes BECAUSE they contain previous revisions
             %% of docs for the updated case. When a doc has been added we simplying
             %% updating the index by just doing a delete followed by an insertion
-            %% for the new versin of the doc
+            %% for the new version of the doc
             index_these_docs(Pid,Deletes,false),
             ?LOG(?INFO, "indexed another ~w ~n", [length(Deletes)]),           
             % then do the inserts

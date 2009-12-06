@@ -13,10 +13,8 @@
 -author('Joe Armstrong').
 
 %% This code was modified considerably to integrate with couchdb
-%% but still retains the original ideas form the text book
+%% but still retains the original ideas from the text book
 -author('Bob Dionne').
-
-
 
 -export([next_docs/1,
          total_docs/1,

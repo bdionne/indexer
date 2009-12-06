@@ -26,25 +26,26 @@ do_indexing(_, [], _) ->
 do_indexing(Pid, Doc, EtsTrigrams) ->
     Index = proplists:get_value(<<"_id">>, element(1, Doc)),
     Tab = ets:new(void, [ordered_set]),
-    DocList = element(1, Doc),
+    DocListSlots = element(1, Doc),
     lists:foreach(fun(Elm) ->
                           case element(1, Elm) of
                               <<"_id">> -> ok;
                               <<"_rev">> -> ok;
                               _ -> Str = binary_to_list(term_to_binary(element(2, Elm))),
+                                   SlotName = element(1,Elm),
                                    indexer_misc:foreach_word_in_string(Str, 
 				      fun(W, N) -> 
-					   process_word(W, Index, 
+					   process_word(W, Index, SlotName, 
 							Tab, EtsTrigrams, 
 							Pid),
 					   N+1
 				   end, 0)
-                          end end, DocList),
+                          end end, DocListSlots),
     ets:delete(Tab).
 
 
 
-process_word(Word, Index, Tab, EtsTrigrams, Pid) ->
+process_word(Word, Index, SlotName, Tab, EtsTrigrams, Pid) ->
     case process_word(Word, EtsTrigrams) of
 	no -> void;
 	{yes, Word1} ->
@@ -52,7 +53,7 @@ process_word(Word, Index, Tab, EtsTrigrams, Pid) ->
 	    case ets:lookup(Tab, Bin) of
 		[] ->
 		    ets:insert(Tab, {Bin}),
-		    Pid ! {Word1, Index};
+		    Pid ! {Word1, Index, SlotName};
 		_ ->
 		    void
 	    end
