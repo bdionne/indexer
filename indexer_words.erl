@@ -32,10 +32,9 @@ do_indexing(Pid, Doc, EtsTrigrams) ->
                               <<"_id">> -> ok;
                               <<"_rev">> -> ok;
                               _ -> Str = binary_to_list(term_to_binary(element(2, Elm))),
-                                   SlotName = element(1,Elm),
                                    indexer_misc:foreach_word_in_string(Str, 
 				      fun(W, N) -> 
-					   process_word(W, Index, SlotName, 
+					   process_word(W, Index,
 							Tab, EtsTrigrams, 
 							Pid),
 					   N+1
@@ -45,7 +44,7 @@ do_indexing(Pid, Doc, EtsTrigrams) ->
 
 
 
-process_word(Word, Index, SlotName, Tab, EtsTrigrams, Pid) ->
+process_word(Word, Index, Tab, EtsTrigrams, Pid) ->
     case process_word(Word, EtsTrigrams) of
 	no -> void;
 	{yes, Word1} ->
@@ -54,7 +53,7 @@ process_word(Word, Index, SlotName, Tab, EtsTrigrams, Pid) ->
 	    case ets:lookup(Tab, Bin) of
 		[] ->
 		    ets:insert(Tab, {Bin}),
-		    Pid ! {Word1, Index, SlotName};
+		    Pid ! {Word1, Index};
 		_  ->
 		    void
 	    end

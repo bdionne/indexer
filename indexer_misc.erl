@@ -88,14 +88,13 @@ collect_replies(N, Dict) ->
     receive
         {'EXIT', _,  _Why} ->
 	    collect_replies(N-1, Dict);
-	{Key, Val, SlotName} ->
-            Bval = [Val, SlotName],
-	    case dict:is_key(Key, Dict) of
+	{Key, Val} ->
+            case dict:is_key(Key, Dict) of
 		true ->
-		    Dict1 = dict:append(Key, Bval, Dict),
+		    Dict1 = dict:append(Key, Val, Dict),
 		    collect_replies(N, Dict1);
 		false ->
-		    Dict1 = dict:store(Key,[Bval], Dict),
+		    Dict1 = dict:store(Key,[Val], Dict),
 		    collect_replies(N, Dict1)
 	    end
 	
@@ -114,8 +113,7 @@ search(Str, Ets, DbName, Idx) ->
     Indices = 
         map(fun(I) -> 
                     indexer_couchdb_crawler:lookup_indices(I, Idx) end, Words1),
-    Sets = [sets:from_list(map(fun(J) ->
-                                       hd(J) end, X)) || X <- Indices, X =/= []],
+    Sets = [sets:from_list(X) || X <- Indices, X =/= []],
     case Sets of 
 	[] ->
 	    none;
@@ -126,23 +124,13 @@ search(Str, Ets, DbName, Idx) ->
 		N when N > 200 ->
 		    tooMany;
 		_ -> 
-                    map(fun(I) -> 
-                                SlotNames = find_slots(I,hd(Indices),[]),
-                                ?LOG(?DEBUG,"the slots are ~p ~n",[SlotNames]),
-                                {[{<<"_id">>,I},{<<"slots">>,SlotNames}]}
+                    map(fun(I) ->
+                                {ok, Doc} = hovercraft:open_doc(DbName, I),
+                                Doc
                         end, Indices1)
 	    end
     end.
 
-find_slots(_Id,[],Acc) ->
-    Acc;
-find_slots(Id,[[Hi,Slot]|T],Acc) ->
-    Acc1 = case Hi of
-               Id -> [Slot | Acc];
-               _ ->
-                   Acc
-           end,
-    find_slots(Id,T,Acc1).
         
             
     

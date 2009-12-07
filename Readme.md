@@ -1,12 +1,10 @@
-## Prototyping FTI for CouchDB databases in CouchDB
+## Prototyping FTI for CouchDB databases in Osmos
 
-Chapter 20 of Joe Armstrong's <a href="http://www.pragprog.com/titles/jaerlang/programming-erlang">Erlang book</a> provides a nice example of the use of processes to do full text indexing with map/reduce. The essential idea is to spawn a process for each document to index and let the reduce function populate the inverted index as it collects the results of the map phase. I recently heard mention of <a href="http://dukesoferl.blogspot.com/2009/07/osmos.html">osmos</a> in a talk from the NoSQL east conference and it struck me as the ideal data structure for storing an inverted index, particularly since it supports user-defined merging. So when one encounters the word Neoplasm in multiple docs one can just write the key/value to the store and let a defined merging function sort things out.
+This branch of the [indexer](http://github.com/bdionne/indexer) is the second attempt at prototyping FTI in CouchDB, this time we're using [osmos](http://dukesoferl.blogspot.com/2009/07/osmos.html) for persistence of the inverted index. Osmos was designed for storage that might have heavy write load. One of the key features is support for user defined mergers. When indexing a large corpus every toime the same normalized word is found another entry for that key is stored in the index. Being able to define how the values are merged seems like it may be quite useful.
 
-Being the lazy programmer that I am I downloaded the Erlang code sample and modified it a bit to try it out against CouchDB databases, using osmos for the index store. It worked ok until I tried a somewhat larger corpus of data from <a href="http://bitdiddle.cloudant.com:5984/biomedgt/">cancer genomics</a>. Osmos started crashing, I'm sure the issues were minor but I hadn't read that code so I thought why not just store the index in a couch db for now and come back to osmos later. 
+We start with more or less same approach as on the [master branch](http://github.com/bdionne/indexer) except we are not tracking which slots a word is found in during indexing, only that it was found in a given doc. 
 
-It turns out to work better than you'd think. Each distinct word is a document so it does fill space as more documents are processed and each document is updated more and more, but compaction takes it readily back down to a manageable size.
 
-It runs in the same VM with couchdb, using <a href="http://github.com/jchris/hovercraft">hovercraft</a> to interact with couch and provide the docs in <a href="http://github.com/bdionne/indexer/blob/master/indexer_couchdb_crawler.erl">batches</a> to be analyzed.
 
 ## Don't try this at home
 
