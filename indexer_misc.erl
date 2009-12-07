@@ -130,8 +130,6 @@ search(Str, Ets, DbName, Idx) ->
                                 SlotNames = find_slots(I,hd(Indices),[]),
                                 ?LOG(?DEBUG,"the slots are ~p ~n",[SlotNames]),
                                 {[{<<"_id">>,I},{<<"slots">>,SlotNames}]}
-                                %%{ok, Doc} = hovercraft:open_doc(DbName, I),
-                                %%Doc
                         end, Indices1)
 	    end
     end.
