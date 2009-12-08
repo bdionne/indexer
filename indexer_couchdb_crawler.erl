@@ -23,15 +23,13 @@
          lookup_doc/2,
          compact_index/1,
          lookup_indices/2, 
-         %%write_indices/3,
+         write_indices/3,
          write_bulk/2,
-         merge_vals/3
-         %%delete_indices/3
+         delete_indices/3
         ]).
 
 -include("../couchdb/src/couchdb/couch_db.hrl").
 -include("indexer.hrl").
--include("../osmos-0.0.1/src/osmos.hrl").
 
 -define(BATCH_SIZE, 1000).
 
@@ -42,7 +40,6 @@ start(DbName, [{reset, DbIndexName}]) ->
     {ok, DbInfo} = hovercraft:db_info(DbName),
     DocCount = proplists:get_value(doc_count,DbInfo),
     store_stats(DbIndexName, LastSeq, DocCount),
-    %%init_osmos_store(binary_to_list(DbIndexName)),
     {DbName, 0}.
 
 db_exists(DbName) ->
@@ -219,98 +216,70 @@ read_doc_count(DbName) ->
     proplists:get_value(<<"doc_count">>,element(1,Doc)).
     
     
-%% these next set of functions will be different for osmos
+ 
 
-merge_vals(_Key, OldVal, NewVal) ->
-    %% case length(OldVal) > 99 andalso length(NewVal) > 99 of
-%%         true -> io:format("getting large now!!!!!!!!!!!!~n",[]);
-%%         _ -> ok
-%%     end,        
-    lists:append(OldVal, NewVal).
-
-couchdb_osmos_format() ->
-    #osmos_table_format {
-      block_size = 4096,
-      key_format = osmos_format:binary(),
-      key_less = fun osmos_table_format:erlang_less/2,
-      value_format = osmos_format:term(),
-      merge = fun merge_vals/3,
-      short_circuit = fun osmos_table_format:never/2,
-      delete = fun osmos_table_format:never/2}.
-
-open_osmos_store(DbIndexName) ->
-    Dir = DbIndexName,
-    F = couchdb_osmos_format(), 
-    osmos:open(DbIndexName, [{directory, Dir}, {format, F}]).
-    
 
 lookup_indices(Word, DbName) ->
-    DbNameBin = binary_to_list(DbName),
-    open_osmos_store(DbNameBin),
-    case osmos:read(DbNameBin, list_to_binary(Word)) of
-        {ok, Indices} -> osmos:close(DbNameBin),
-                         Indices;
+    case lookup_doc(list_to_binary(Word), DbName) of
+        {ok, Doc} -> proplists:get_value(<<"indices">>,element(1, Doc));
         not_found -> []
     end.
-     
-
+ 
 write_bulk(MrListS, DbName) ->
-    DbNameBin = binary_to_list(DbName),
-    open_osmos_store(DbNameBin),
-    lists:map(fun({Key, Vals}) ->
-                      ?LOG(?DEBUG, "writing values ~p ~n",[Vals]),
-                      osmos:write(binary_to_list(DbName), list_to_binary(Key), Vals)
-              end,MrListS),
-    osmos:close(DbNameBin).
+    Docs = lists:map(fun({Key, Vals}) ->
+                             prep_doc(Key, Vals, DbName)
+                     end,
+                     MrListS),
+    hovercraft:save_bulk(DbName, Docs).  
     
   
-%% write_indices(Word, Vals, DbName) ->
-%%     case lookup_doc(list_to_binary(Word), DbName) of
-%%         {ok, Doc} -> 
-%%             Props = element(1, Doc),
-%%             Indices = proplists:get_value(<<"indices">>, Props),
-%%             NewProps = proplists:delete(<<"indices">>, Props),
-%%             NewDoc = 
-%%                 {lists:append(NewProps, 
-%%                               [{<<"indices">>,lists:append(Indices, Vals)}] )},
-%%             hovercraft:save_doc(DbName, NewDoc);
-%%         not_found -> 
-%%             NewDoc = {[{<<"_id">>, list_to_binary(Word)},
-%%                        {<<"indices">>,Vals}]},
-%%             hovercraft:save_doc(DbName, NewDoc)
-%%     end.
+write_indices(Word, Vals, DbName) ->
+    case lookup_doc(list_to_binary(Word), DbName) of
+        {ok, Doc} -> 
+            Props = element(1, Doc),
+            Indices = proplists:get_value(<<"indices">>, Props),
+            NewProps = proplists:delete(<<"indices">>, Props),
+            NewDoc = 
+                {lists:append(NewProps, 
+                              [{<<"indices">>,lists:append(Indices, Vals)}] )},
+            hovercraft:save_doc(DbName, NewDoc);
+        not_found -> 
+            NewDoc = {[{<<"_id">>, list_to_binary(Word)},
+                       {<<"indices">>,Vals}]},
+            hovercraft:save_doc(DbName, NewDoc)
+    end.
 
-%% prep_doc(Word, Vals, DbName) ->
-%%    case lookup_doc(list_to_binary(Word), DbName) of
-%%         {ok, Doc} -> 
-%%             Props = element(1, Doc),
-%%             Indices = proplists:get_value(<<"indices">>, Props),
-%%             %%?LOG(?DEBUG,"the current indices ~p ~n",[Indices]),
-%%             NewProps = proplists:delete(<<"indices">>, Props),
-%%             %%?LOG(?DEBUG,"props after deleting ~p ~n",[NewProps]),
-%%             {lists:append(NewProps, 
-%%                               [{<<"indices">>,lists:append(Indices, Vals)}] )};
-%%         not_found -> 
-%%             {[{<<"_id">>, list_to_binary(Word)},
-%%                        {<<"indices">>,Vals}]}
-%%     end.
+prep_doc(Word, Vals, DbName) ->
+   case lookup_doc(list_to_binary(Word), DbName) of
+        {ok, Doc} -> 
+            Props = element(1, Doc),
+            Indices = proplists:get_value(<<"indices">>, Props),
+            %%?LOG(?DEBUG,"the current indices ~p ~n",[Indices]),
+            NewProps = proplists:delete(<<"indices">>, Props),
+            %%?LOG(?DEBUG,"props after deleting ~p ~n",[NewProps]),
+            {lists:append(NewProps, 
+                              [{<<"indices">>,lists:append(Indices, Vals)}] )};
+        not_found -> 
+            {[{<<"_id">>, list_to_binary(Word)},
+                       {<<"indices">>,Vals}]}
+    end.
     
 
-%% delete_indices(Word, Vals, DbName) ->
-%%     case lookup_doc(list_to_binary(Word), DbName) of
-%%         {ok, Doc} -> 
-%%             Props = element(1, Doc),
-%%             Indices = proplists:get_value(<<"indices">>, Props),
-%%             NewIndices = lists:foldl(fun(Elem, Acc) ->
-%%                                              lists:delete(Elem, Acc)
-%%                                      end,Indices,Vals),
-%%             NewProps = proplists:delete(<<"indices">>, Props),
-%%             NewDoc = 
-%%                 {lists:append(NewProps, 
-%%                               [{<<"indices">>,NewIndices}])},
-%%             hovercraft:save_doc(DbName, NewDoc);
-%%         not_found -> ok
-%%     end.
+delete_indices(Word, Vals, DbName) ->
+    case lookup_doc(list_to_binary(Word), DbName) of
+        {ok, Doc} -> 
+            Props = element(1, Doc),
+            Indices = proplists:get_value(<<"indices">>, Props),
+            NewIndices = lists:foldl(fun(Elem, Acc) ->
+                                             lists:delete(Elem, Acc)
+                                     end,Indices,Vals),
+            NewProps = proplists:delete(<<"indices">>, Props),
+            NewDoc = 
+                {lists:append(NewProps, 
+                              [{<<"indices">>,NewIndices}])},
+            hovercraft:save_doc(DbName, NewDoc);
+        not_found -> ok
+    end.
     
     
     
