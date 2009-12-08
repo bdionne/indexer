@@ -181,6 +181,7 @@ index_these_docs(Pid, Docs) ->
                          MrList),
     Tbeg = now(),
     indexer_server:write_bulk_indices(Pid, MrListS),
+    %%sleep(5000),
     
     Tdiff = timer:now_diff(now(),Tbeg),
     ?LOG(?DEBUG, "time spent in writing was ~p ~n",[Tdiff]).
